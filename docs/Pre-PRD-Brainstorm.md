@@ -102,7 +102,7 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
 - The NewsNexus12 portal page collects search criteria, validates that at least one criterion exists, and sends a `POST` request to `/google-rss/make-request`.
 - The API route builds a Google News RSS query, fetches the RSS XML, parses the returned items, and sends the parsed articles back to the portal as a preview response.
 - The portal stores the returned `url`, maps each returned article into local table state, and displays the articles without saving them automatically.
-- The full NewsNexus12 page also supports selecting rows and adding selected articles to the database through `/google-rss/add-to-database`. For the Lite demo, the required behavior for this section is the collection and preview handoff into the persistent demo table. If persistence is added later, it should follow the full app's selected-article save behavior.
+- The full NewsNexus12 page also supports selecting rows and adding selected articles to the database through `/google-rss/add-to-database`. For the Lite demo, the required behavior for this section is the collection and preview handoff into the current working demo table. If persistence is added later, it should follow the full app's selected-article save behavior.
 
 2. Lite query input requirements
 
@@ -246,23 +246,33 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
 - The job initializes the database models, selects target articles, then calls the shared ArticleContents02 enrichment module.
 - The source worker can select articles broadly by age/count or process explicit `articleIds`. For the Lite demo, process the articles already present in the Google RSS table instead of running broad database targeting.
 - The source workflow is sequential. It processes one article at a time and respects cancellation through `AbortSignal`.
-- The source workflow writes outcomes to `ArticleContents02`. For the Lite demo, store equivalent scrape outcomes in the table's in-memory article state, with enough detail to open the scraped-content modal.
+- The source workflow writes outcomes to `ArticleContents02`.
 
-2. Worker-node packages and libraries
+2. Lite ephemerality adjustment
+
+- The Lite demo should not initialize NewsNexus12 database models for this step.
+- The Lite demo should not select scrape targets from the full app's `Articles` table.
+- The Lite demo should not write to `ArticleContents02` or any other durable scrape-content table.
+- The Lite demo should not implement durable queue persistence for scrape jobs unless a later PRD requirement explicitly adds it.
+- Use the source worker's queued job lifecycle as a UI model only: idle, running, completed, and failed can live in in-memory working state for the current demo flow.
+- Store scrape outcomes, scraped content, publisher URLs, failure details, body source, and extraction source only in the table's in-memory article state.
+- A new flow, page refresh, or reset should clear all scrape outcomes and scraped content.
+
+3. Worker-node packages and libraries
 
 - `express`: exposes the worker HTTP routes, including `/article-content-scraper-02/start-job`.
-- `@newsnexus/db-models`: reads `Articles` and persists `ArticleContents02` rows in the full app.
+- `@newsnexus/db-models`: source-only dependency that reads `Articles` and persists `ArticleContents02` rows in the full app. The Lite demo should not require it for scraping persistence.
 - `playwright`: launches headless Chromium for Google News navigation and publisher-page fallback rendering.
 - `cheerio`: parses publisher HTML and extracts the article title/body text.
 - Native `fetch`: performs direct publisher HTTP requests before using browser fallback.
-- `winston`: logs workflow, retry, skip, and persistence details.
+- `winston`: logs workflow, retry, skip, and persistence details in the source worker. Lite may use normal app logging without durable scrape storage.
 - `dotenv`: loads worker runtime configuration.
 - `typescript`, `tsx`, `jest`, `ts-jest`, and `supertest`: support worker development and tests.
 - `xml2js` and `exceljs`: are part of worker-node and are used by the Google RSS ingestion workflow, not by the active article-content scraper itself.
 - `@huggingface/transformers`: is part of worker-node for semantic scoring, not scraping.
 - `puppeteer`: is still listed in `worker-node/package.json`, and some README text references it, but the active ArticleContents02 scraper imports and uses Playwright Chromium. The Lite scraping implementation should follow the Playwright-based code path unless the project intentionally changes this later.
 
-3. Input article requirements
+4. Input article requirements
 
 - Each article entering the scrape step should include:
   - `title`
@@ -276,7 +286,7 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
 - If RSS `content` is missing or shorter than `200` characters, run the Google-to-publisher scrape flow.
 - If an article has no URL, mark it as skipped or failed with a clear message and do not block scraping the remaining articles.
 
-4. Google News gatekeeping and publisher URL discovery
+5. Google News gatekeeping and publisher URL discovery
 
 - Use Playwright Chromium to open the Google RSS article URL before fetching the publisher page.
 - Create the browser context with a desktop Chrome-style user agent, `en-US` locale, `1440x900` viewport, and browser-like `Accept` / `Accept-Language` headers.
@@ -307,7 +317,7 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
 - Reject publisher URL candidates that are still owned by Google, including `google.com`, `www.google.com`, `news.google.com`, and `consent.google.com`.
 - If no non-Google publisher URL is found, mark the scrape as failed with `no_publisher_url_found`.
 
-5. Publisher fetching requirements
+6. Publisher fetching requirements
 
 - Fetch the discovered publisher URL with direct HTTP first.
 - Use browser-style headers and follow redirects.
@@ -330,7 +340,7 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
 - If Playwright does not improve the publisher HTML, keep the better direct HTTP result and record that fallback did not improve the page.
 - If all publisher attempts fail, record `publisher_fetch_error`.
 
-6. Article parsing requirements
+7. Article parsing requirements
 
 - Parse publisher HTML with Cheerio-style DOM parsing.
 - Remove non-content elements before extracting text:
@@ -351,7 +361,7 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
 - If no useful paragraph text exists, fall back to normalized body text.
 - Treat parsed content shorter than `200` characters as `short_content`.
 
-7. Scrape result requirements for the Lite table
+8. Scrape result requirements for the Lite table
 
 - Each article should receive a scrape result object that can populate the `Scraped` column and modal.
 - Store at least these fields in local state:
@@ -369,6 +379,8 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
   - `bodySource`
   - `googleStatusCode`
   - `publisherStatusCode`
+- Do not persist these fields beyond the current demo flow.
+- Do not save scraped content, scrape failures, publisher URLs, or diagnostics to local storage, browser storage, files, or a database.
 - Use the same failure type vocabulary as worker-node:
   - `blocked_google`
   - `blocked_publisher`
@@ -393,7 +405,7 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
 - The check mark should open a modal showing the scraped title, publisher URL, body source, extraction source, and article content.
 - Failed scrapes should leave the visible `Scraped` cell blank or show a non-success state only if the final design calls for visible failure diagnostics. The failure details should remain available in developer state/logs for later debugging.
 
-8. Runtime and processing requirements
+9. Runtime and processing requirements
 
 - Process articles sequentially to match the source workflow and reduce browser pressure.
 - Apply a per-article timeout. The source worker default is `ARTICLE_CONTENT_02_ARTICLE_TIMEOUT_MS`, defaulting to `90000ms` with a minimum allowed value of `10000ms`.
@@ -409,7 +421,7 @@ The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-
   - failed scrapes
 - The Lite UI should keep the Next button disabled while scraping is running and enable it after the scrape run completes, even if some articles failed.
 
-9. Source files researched for this section
+10. Source files researched for this section
 
 - `/Users/nick/Documents/NewsNexus12/worker-node/package.json`
 - `/Users/nick/Documents/NewsNexus12/worker-node/src/routes/articleContentScraper02.ts`
