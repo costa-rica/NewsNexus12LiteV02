@@ -14,6 +14,28 @@ The workflow follows this progression:
 4. **AI State Assigner** → State classification is determined
 5. **Semantic Score** → Content relevance is scored
 
+### Data Persistence & Ephemerality
+
+This app is a demo. It does not intend to persist pipeline result data across sessions.
+
+**Permanent data (intentionally kept):**
+
+- Feature-extraction keywords (e.g. the semantic scorer keyword list)
+- Default prompts used for AI steps (e.g. the OpenAI state-assignment prompt)
+
+These are configuration/inputs to the demo and should survive restarts.
+
+**Ephemeral data (intentionally NOT kept):**
+
+- Google RSS query results and the working article set
+- Scrape outcomes and scraped content
+- Nexus Location Ratings
+- AI State assignments
+- Nexus Semantic Ratings
+- Any user-edited prompt text (edits are used for the current run only and are not saved; new flows always start from the default prompt)
+
+All ephemeral data lives in in-memory/working state for the duration of a single demo flow. A new flow or a reset clears it. Individual `Flow Requirements` subsections inherit this rule: where a section describes the full NewsNexus12 behavior of writing to a database, the Lite demo stores the equivalent outcome in in-memory working state instead, unless a later PRD requirement explicitly adds durable persistence.
+
 ### Visual Design Pattern
 
 - **Persistent Table:** The same table structure carries through all steps. Columns populate progressively as each analysis stage completes.
