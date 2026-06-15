@@ -71,9 +71,118 @@ Allow users to search for and retrieve candidate articles from Google News RSS.
 - "State (AI Assigned)" (empty)
 - "Nexus Semantic Rating" (empty)
 
-### Description of the Google RSS collection
+### Flow Requirements: Google RSS Collection
 
-[update this]
+The Lite Google RSS collection should imitate the interactive NewsNexus12 portal flow from `portal/src/app/(dashboard)/articles/get/google-rss/page.tsx`, with the search controls simplified for the demo.
+
+1. Source flow to imitate
+
+- The NewsNexus12 portal page collects search criteria, validates that at least one criterion exists, and sends a `POST` request to `/google-rss/make-request`.
+- The API route builds a Google News RSS query, fetches the RSS XML, parses the returned items, and sends the parsed articles back to the portal as a preview response.
+- The portal stores the returned `url`, maps each returned article into local table state, and displays the articles without saving them automatically.
+- The full NewsNexus12 page also supports selecting rows and adding selected articles to the database through `/google-rss/add-to-database`. For the Lite demo, the required behavior for this section is the collection and preview handoff into the persistent demo table. If persistence is added later, it should follow the full app's selected-article save behavior.
+
+2. Lite query input requirements
+
+- Use one visible query input for the Google RSS search.
+- Treat this input as the full app's `and_keywords` field.
+- Do not show or collect separate `and_exact_phrases`, `or_keywords`, or `or_exact_phrases` controls.
+- Send the unused criteria as empty strings, or omit them if the Lite API handler normalizes missing values to empty strings.
+- Preserve AND behavior:
+  - All comma-separated terms entered by the user should be required in the Google News query.
+  - Empty terms should be trimmed and ignored.
+  - A term that already has matching single or double quotes should keep those quotes.
+  - A term containing spaces should be wrapped in double quotes before it is sent to Google News RSS, matching the NewsNexus12 query builder behavior.
+- If the query input is blank after trimming, do not call Google RSS. Show a warning or inline error that asks the user to enter a search query.
+
+3. Time range requirements
+
+- Match the portal page's default search window by using `7d` as the default Google RSS time range.
+- The first Lite version does not need a visible time-range control because the existing section requires a single search bar.
+- The final Google query should append `when:7d` unless a later PRD requirement explicitly adds a user-editable time range.
+
+4. Request construction requirements
+
+- Build the same request shape used by the NewsNexus12 portal/API flow:
+
+```json
+{
+	"and_keywords": "<user query>",
+	"and_exact_phrases": "",
+	"or_keywords": "",
+	"or_exact_phrases": "",
+	"time_range": "7d"
+}
+```
+
+- Build the Google News RSS URL with the same base and locale parameters used in NewsNexus12:
+  - Base URL: `https://news.google.com/rss/search`
+  - Query parameter: `q=<normalized query with when:7d>`
+  - `hl`: `GOOGLE_RSS_HL`, default `en-US`
+  - `gl`: `GOOGLE_RSS_GL`, default `US`
+  - `ceid`: `GOOGLE_RSS_CEID`, default `US:en`
+- Keep the generated RSS URL in state so the app can display it like the full portal page does.
+
+5. RSS fetch and parsing requirements
+
+- Fetch the generated Google News RSS URL using a server-side request, not a browser request directly to Google.
+- Use a timeout for the RSS request. The NewsNexus12 API path uses a 20 second timeout.
+- Send a User-Agent header for the request. The NewsNexus12 API path uses `NewsNexus12API/1.0`.
+- Parse the RSS XML response and read items from `rss.channel[0].item`.
+- Map each RSS item into the demo article shape:
+  - `title`: `item.title[0]`
+  - `link`: `item.link[0]`
+  - `description`: prefer the first anchor text from `item.description[0]`; otherwise strip HTML tags and use the plain text description
+  - `source`: `item.source[0]._` when available, otherwise `item.source[0]`
+  - `pubDate`: `item.pubDate[0]`
+  - `content`: `item["content:encoded"][0]` when available
+- The table only needs to show Title, News Source, and Description at this step, but the app should keep `link`, `pubDate`, and `content` in the article object for later pipeline steps.
+
+6. Article limit requirements
+
+- Limit the articles used by the Lite table to the `ARTICLE_LIMIT_GOOGLE_RSS_SEARCH` dotenv value.
+- If `ARTICLE_LIMIT_GOOGLE_RSS_SEARCH` is missing, empty, not a positive integer, or otherwise invalid, default to `10`.
+- Apply the limit after RSS parsing and before setting the table's article state.
+- The limited article set should become the working set for the rest of the demo pipeline.
+- The UI should not expose extra unshown articles through table pagination when they are beyond the configured limit.
+
+7. Response and UI state requirements
+
+- On success, store the response in a shape equivalent to the NewsNexus12 portal response:
+
+```json
+{
+	"success": true,
+	"url": "<generated Google RSS URL>",
+	"articlesArray": ["<limited parsed article objects>"],
+	"count": "<number of limited articles>"
+}
+```
+
+- Set loading state while the request is in progress.
+- Disable the request/search action while loading.
+- Show the same general success outcome as the source flow: the user should know how many articles were fetched into the demo table.
+- Display the generated Google RSS URL after a successful request.
+- Do not clear the previous successful table data until a new request succeeds, unless the user explicitly starts a new flow/reset action.
+- The Next button should become enabled only after the limited article working set has at least one article.
+
+8. Error handling requirements
+
+- If Google News returns HTTP 503, show a rate-limit message that tells the user Google News RSS is temporarily unavailable and they should retry later.
+- For other non-OK RSS responses, show a request failed message and do not advance the flow.
+- If XML parsing fails, show a request failed message and do not advance the flow.
+- If the request succeeds with zero parsed articles, keep the user on step 1 and show an empty-state message in the table area.
+- Error responses should not mutate the current working article set.
+
+9. Source files researched for this section
+
+- `/Users/nick/Documents/NewsNexus12/portal/src/app/(dashboard)/articles/get/google-rss/page.tsx`
+- `/Users/nick/Documents/NewsNexus12/portal/src/components/tables/TableNewsOrgsGoogleRssFeed.tsx`
+- `/Users/nick/Documents/NewsNexus12/portal/src/types/article.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/routes/newsOrgs/googleRss.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/modules/newsOrgs/queryBuilder.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/modules/newsOrgs/rssFetcher.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/jobs/requestGoogleRssJob.ts`
 
 ---
 
@@ -104,7 +213,7 @@ Scrape full article content from the URLs identified in the search step, using t
 - "State (AI Assigned)" (empty)
 - "Nexus Semantic Rating" (empty)
 
-### Description of Scraping flow description from NewsNexus12/worker-node
+### Flow Requirements: Scraping
 
 [update this]
 
@@ -136,7 +245,7 @@ Using the article's content from scraping or defaulting to the article descripti
 - "State (AI Assigned)" (empty)
 - "Nexus Semantic Rating" (empty)
 
-### Description of Hugging Face zero-shot classification model used in the NewsNexus12 worker-python
+### Flow Requirements: Nexus Location Rating
 
 [update this]
 
@@ -168,6 +277,8 @@ Using the article's content from scraping or defaulting to the article descripti
 - "Nexus Location Rating" (populated by the location rating processe / hugging face model)
 - "State (AI Assigned)" (populated by the OpenAI response)
 - "Nexus Semantic Rating" (empty)
+
+### Flow Requirements: State AI Assignment
 
 ### Description of OpenAI request flow used in the NewsNexus12 worker-node
 
@@ -204,7 +315,7 @@ Using the article's content from scraping or defaulting to the article descripti
 - "State (AI Assigned)" (populated by the OpenAI response)
 - "Nexus Semantic Rating" (populated by result of semantic score)
 
-### Description of Hugging Face feature-extraction model used in the NewsNexus12 worker-node
+### Flow Requirements: Nexus Semantic Rating
 
 [update this]
 
