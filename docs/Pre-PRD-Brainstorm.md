@@ -667,9 +667,237 @@ Using the article's content from scraping or defaulting to the article descripti
 
 ### Flow Requirements: State AI Assignment
 
-### Description of OpenAI request flow used in the NewsNexus12 worker-node
+The Lite State AI Assignment flow should imitate NewsNexus12 worker-node's `stateAssigner` workflow. In NewsNexus12, this workflow selects candidate articles, makes sure article content has been enriched, substitutes article data into a markdown prompt, sends that prompt to OpenAI, parses the JSON response, and writes the result to `ArticleStateContract02`.
 
-[update this]
+1. Source flow to imitate
+
+- The source workflow is exposed by worker-node at `POST /state-assigner/start-job`.
+- The API project can proxy automation requests to this worker endpoint through `/news-orgs/automations/state-assigner/start-job`.
+- The route validates that `KEY_OPEN_AI` and `PATH_TO_STATE_ASSIGNER_FILES` are configured.
+- The route validates article-targeting request fields and enqueues one job in the shared worker-node queue.
+- The endpoint returns `202` with `jobId`, `status`, and `endpointName`.
+- The source worker accepts targeting fields such as:
+  - `targetArticleThresholdDaysOld`
+  - `targetArticleStateReviewCount`
+  - `articleIds`
+  - `articleIdMinExclusive`
+  - `articleIdMaxInclusive`
+  - `includeArticlesThatMightHaveBeenStateAssigned`
+- In weekly orchestration, the state assigner uses the number of articles added during the Google RSS step as `targetArticleStateReviewCount` when that count is available. If the count is missing, it falls back to `100`.
+- The full worker selects candidate articles from the database, skips articles that already have state assignments, skips articles marked not relevant, and applies optional article-id cursor bounds.
+- Before making OpenAI requests, the source worker runs bounded ArticleContents02 enrichment for the exact candidate set it is about to analyze.
+- If scrape enrichment fails, the source worker logs the failure and continues with state assignment.
+- The source worker loads article content from the canonical `ArticleContents02` row when usable, otherwise it falls back to `article.description`.
+- The source worker sends one OpenAI request per article.
+- The source worker persists successful parsed responses into `ArticleStateContract02`.
+
+2. Lite ephemerality adjustment
+
+- The Lite demo should process the current in-memory working article set instead of selecting articles from the NewsNexus12 database.
+- The Lite demo should not query or write `Articles`, `ArticleContents02`, `ArticleStateContract02`, `ArticleStateContract`, `Prompts`, `States`, `ArtificialIntelligences`, or `EntityWhoCategorizedArticle`.
+- The Lite demo should not create durable worker queue records, raw OpenAI response files, prompt rows, state assignment rows, or human-approval rows.
+- Store state assignments only in the current in-memory article state.
+- Store OpenAI request status, response status, parsed response details, validation errors, and per-article failure messages only in current in-memory run state.
+- A new flow, page refresh, or reset should clear all AI state assignments and any user-edited prompt text.
+- The default state assignment prompt is permanent configuration for the Lite app and should survive restarts.
+- The user's edited prompt text is not permanent and must not be saved to a database, file, local storage, browser storage, or any other persistent data solution.
+
+3. Default prompt requirements
+
+- The Lite default prompt should be taken directly from the NewsNexus12 state assigner prompt file:
+  - `/Users/nick/Documents/_project_resources/NewsNexus12/utilities/state_assigner/prompts/prompt.md`
+- The source worker loads markdown files from `PATH_TO_STATE_ASSIGNER_FILES/prompts`, trims them, syncs new prompt text into the `Prompts` table, then uses the latest prompt row by descending id.
+- The Lite demo should not sync prompt files into a database.
+- The Lite demo should keep one permanent default prompt template in app configuration or a checked-in prompt asset.
+- On every new flow, the editable prompt field should reset to the default prompt template.
+- The prompt editor should appear below the articles table on the State AI Assignment page before the user clicks Start Assigning States.
+- The user may edit the prompt template in the UI before starting the run.
+- When the user clicks Start Assigning States, the run must use the current edited prompt template.
+- Once a run starts, disable prompt editing until the run finishes, fails, or is cancelled.
+- The prompt template must keep the source placeholders:
+  - `{articleTitle}`
+  - `{articleContent}`
+- If the user removes one or both placeholders, the app should still run with the edited prompt, but the final per-article prompt will be missing that substituted article field. This matches the principle that the edited prompt is the user's current-run instruction.
+- The default prompt template is:
+
+```md
+# Task: Determine U.S. Location and State from a News Article
+
+You are an AI agent responsible for reviewing a news article and determining whether the events described occurred in the United States, and if so, identifying the U.S. state.
+
+You will be provided with:
+
+- **Article Title**
+- **Article Content**
+
+---
+
+## Instructions
+
+1. Carefully read the article title and content.
+2. Determine whether the **events described in the article occurred in the United States**.
+3. Base your decision only on information explicitly stated or clearly implied in the article.
+   - Named U.S. cities, states, counties, landmarks, or references to U.S.-specific institutions (e.g., U.S. courts, state governments, U.S. police departments) may be used as evidence.
+   - If the article is ambiguous, refers to multiple countries, or lacks sufficient geographic detail, treat it as **not occurring in the United States**.
+
+---
+
+## Output Rules
+
+- You **must** respond with a **valid JSON object only**.
+- Do **not** include explanations, formatting, or commentary outside of the JSON.
+- Do **not** infer or guess the state if it is not clearly supported by the article.
+
+---
+
+## JSON Response Schema
+
+### If the events occurred in the United States:
+
+{
+"occuredInTheUS": true,
+"reasoning": "<brief explanation citing specific evidence from the article>",
+"state": "<full U.S. state name spelled out>"
+}
+
+### If the events did not occur in the United States:
+
+{
+"occuredInTheUS": false,
+"reasoning": "<brief explanation citing specific evidence from the article>"
+}
+
+### Article Title
+
+{articleTitle}
+
+### Article Content
+
+{articleContent}
+```
+
+4. OpenAI request requirements
+
+- Send OpenAI requests from a server-side route or server action so the OpenAI API key is never exposed to the browser.
+- Use the same provider request shape as the source worker-node flow unless a later PRD requirement intentionally changes it.
+- The OpenAI endpoint used by the source worker is `https://api.openai.com/v1/chat/completions`.
+- The source request body is:
+
+```json
+{
+	"model": "gpt-4o-mini",
+	"messages": [
+		{
+			"role": "user",
+			"content": "<prompt template after article placeholder substitution>"
+		}
+	],
+	"temperature": 0.3
+}
+```
+
+- The source worker does not send a separate system message.
+- The source worker does not use a structured-output or response-format parameter; it expects the prompt to force JSON-only output.
+- The Lite app should parse the first completion choice from `choices[0].message.content`.
+- The Lite app should treat a missing message content value as an article-level failure.
+- The Lite app should parse the response text as JSON.
+- The JSON field name must preserve the source worker's spelling: `occuredInTheUS`.
+- The parsed response must include:
+  - `occuredInTheUS` as a boolean
+  - `reasoning` as a non-empty string
+- When `occuredInTheUS` is `true`, the response should include `state` as a full U.S. state name.
+- When `occuredInTheUS` is `false`, the response may omit `state`.
+
+5. Input article requirements
+
+- The State AI Assignment step should process the current in-memory articles that have advanced through Google RSS, scraping, and Nexus Location Rating.
+- The Start Assigning States button should be disabled until the current working article set has at least one article.
+- Use the article title from the Google RSS article object.
+- Use successful scraped article content when available.
+- If scraped content is missing, failed, blank, or unusable, fall back to the article description.
+- The source worker uses canonical `ArticleContents02` content when `hasUsableArticleContent02` passes, otherwise `description`; the Lite equivalent is successful in-memory scrape content, otherwise description.
+- Build each article prompt by replacing:
+  - `{articleTitle}` with the article title or an empty string
+  - `{articleContent}` with the selected article content or description fallback
+- Process rows sequentially to match the source worker's per-article loop.
+- If an article has neither title nor usable article text, skip that article and continue processing later rows.
+- If the user starts assignment more than once during the same flow, skip rows that already have an in-memory state assignment unless the UI explicitly provides a rerun/reset action.
+
+6. Response mapping requirements
+
+- For every valid OpenAI response, store an in-memory state assignment object on the matching article row.
+- The in-memory assignment should include at least:
+  - `occuredInTheUS`
+  - `reasoning`
+  - `stateName`
+  - `rawStateText`
+  - `resultStatus`
+  - `errorMessage`
+- If `occuredInTheUS` is `true` and `state` matches a known U.S. state name, set `stateName` to that state name.
+- If `occuredInTheUS` is `true` and `state` matches a known state abbreviation, normalize `stateName` to the full state name. This follows the source worker's lookup order of state name first, then state abbreviation.
+- If `occuredInTheUS` is `true` but the state value is missing, blank, or does not match the known state list, store the response as a completed assignment with `stateName` empty and preserve the raw state text in memory for diagnostics.
+- If `occuredInTheUS` is `false`, store a completed assignment with `stateName` empty.
+- Do not treat `occuredInTheUS: false` as a failed row. In NewsNexus12 this is a valid state assignment result persisted with `stateId = null`.
+- Article-level OpenAI errors, malformed JSON, missing required fields, or per-article timeouts should leave that row's State (AI Assigned) value unset and store the failure only in current run state.
+
+7. Table display requirements
+
+- Before the assignment run starts, `State (AI Assigned)` cells should remain empty.
+- For valid assignment responses with a known state, display the full state name in the `State (AI Assigned)` cell.
+- For valid assignment responses with no concrete state, display `No state`, matching the review table behavior in `TableReviewArticles.tsx`.
+- For failed or skipped articles with no valid assignment response, display `N/A` or leave the cell empty according to the final table design.
+- Use the same compact text-link visual treatment as the NewsNexus12 review table for populated state assignment cells.
+- Sorting should place unset or failed assignment cells last if sorting is enabled.
+- If a state assignment details modal is included, it should show the state display value, `occuredInTheUS`, reasoning, and any current-run error details. These modal details should not be persisted.
+
+8. Runtime and progress requirements
+
+- When the user clicks Start Assigning States, disable the Start Assigning States button and the Next button until the run finishes, fails, or is cancelled.
+- Show progress as articles are processed, including the current row count out of the eligible row count.
+- Use source-like lifecycle states in memory:
+  - idle
+  - queued or starting
+  - running
+  - completed
+  - failed
+  - cancelled
+- The source worker applies a per-article iteration timeout of `10000ms`. The Lite demo should use `10000ms` as the default per-article timeout unless a later PRD requirement adds configuration.
+- If an article times out, skip that article, record the timeout in memory, and continue processing later articles.
+- If an article-level OpenAI call fails, log or store the current-run error in memory and continue processing later articles.
+- If the run completes with at least one valid assignment result, enable the Next button.
+- If every article fails or is skipped, keep the user on the State AI Assignment step and show a clear failed or empty-result state.
+- If the run completes with a mix of valid assignments and failures, allow the flow to continue while keeping failed rows visible as unset or `N/A`.
+
+9. Lite persistence and prompt editing requirements
+
+- The default prompt template is permanent app configuration and should not be overwritten by user edits.
+- User-edited prompt text should live only in the current page/run state.
+- Starting a new flow should restore the default prompt template.
+- Resetting the flow should restore the default prompt template.
+- Refreshing the page should restore the default prompt template unless a later PRD requirement adds an explicit draft-saving feature.
+- The prompt used for an assignment run should be captured in current run state so the UI can show which prompt text was used during that run.
+- Do not store the edited prompt, final per-article prompts, raw OpenAI responses, parsed OpenAI responses, reasoning, state names, or errors outside current in-memory state.
+
+10. Source files researched for this section
+
+- `/Users/nick/Documents/NewsNexus12/worker-node/package.json`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/routes/stateAssigner.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/jobs/stateAssignerJob.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/startup/stateAssignerFiles.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/articleTargeting.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/docs/worker-node-api-documentation/endpoints/state-assigner.md`
+- `/Users/nick/Documents/NewsNexus12/worker-node/tests/routes/stateAssigner.test.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/tests/modules/stateAssignerJob.test.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/tests/modules/orchestratorCoordinator.test.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/routes/newsOrgs/automations.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/routes/analysis/state-assigner.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/modules/analysis/state-assigner.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/modules/analysis/state-assigner-sql.ts`
+- `/Users/nick/Documents/NewsNexus12/portal/src/app/(dashboard)/analysis/state-assigner/page.tsx`
+- `/Users/nick/Documents/NewsNexus12/portal/src/components/tables/TableReviewArticles.tsx`
+- `/Users/nick/Documents/NewsNexus12/portal/src/components/tables/TableReviewStateAssigner.tsx`
+- `/Users/nick/Documents/NewsNexus12/worker-node/AGENTS.md`
+- `/Users/nick/Documents/_project_resources/NewsNexus12/utilities/state_assigner/prompts/prompt.md`
 
 ---
 
