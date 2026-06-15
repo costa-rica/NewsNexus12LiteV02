@@ -102,9 +102,19 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
 - The NewsNexus12 portal page collects search criteria, validates that at least one criterion exists, and sends a `POST` request to `/google-rss/make-request`.
 - The API route builds a Google News RSS query, fetches the RSS XML, parses the returned items, and sends the parsed articles back to the portal as a preview response.
 - The portal stores the returned `url`, maps each returned article into local table state, and displays the articles without saving them automatically.
-- The full NewsNexus12 page also supports selecting rows and adding selected articles to the database through `/google-rss/add-to-database`. For the Lite demo, the required behavior for this section is the collection and preview handoff into the current working demo table. If persistence is added later, it should follow the full app's selected-article save behavior.
+- The full NewsNexus12 page also supports selecting rows and adding selected articles to the database through `/google-rss/add-to-database`. For the Lite demo, this database-ingestion behavior is source context only and should not be implemented.
 
-2. Lite query input requirements
+2. Lite ephemerality adjustment
+
+- The Lite demo should collect Google RSS articles only into the current in-memory working article set.
+- The Lite demo should not call or implement `/google-rss/add-to-database`.
+- The Lite demo should not save Google RSS query results, selected rows, request URLs, RSS content, or returned article metadata to a database, files, local storage, browser storage, or any other persistent data solution.
+- The generated Google RSS URL may be kept in state only so it can be displayed during the current demo flow.
+- The query text may be kept in state only while the current search form or demo flow is active.
+- A new flow, page refresh, or reset should clear the Google RSS query text, generated RSS URL, fetched articles, selected rows, and any RSS `content` copied into article state.
+- The output of this step is the current working table, not a durable ingestion record.
+
+3. Lite query input requirements
 
 - Use one visible query input for the Google RSS search.
 - Treat this input as the full app's `and_keywords` field.
@@ -117,13 +127,13 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
   - A term containing spaces should be wrapped in double quotes before it is sent to Google News RSS, matching the NewsNexus12 query builder behavior.
 - If the query input is blank after trimming, do not call Google RSS. Show a warning or inline error that asks the user to enter a search query.
 
-3. Time range requirements
+4. Time range requirements
 
 - Match the portal page's default search window by using `7d` as the default Google RSS time range.
 - The first Lite version does not need a visible time-range control because the existing section requires a single search bar.
 - The final Google query should append `when:7d` unless a later PRD requirement explicitly adds a user-editable time range.
 
-4. Request construction requirements
+5. Request construction requirements
 
 - Build the same request shape used by the NewsNexus12 portal/API flow:
 
@@ -145,7 +155,7 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
   - `ceid`: `GOOGLE_RSS_CEID`, default `US:en`
 - Keep the generated RSS URL in state so the app can display it like the full portal page does.
 
-5. RSS fetch and parsing requirements
+6. RSS fetch and parsing requirements
 
 - Fetch the generated Google News RSS URL using a server-side request, not a browser request directly to Google.
 - Use a timeout for the RSS request. The NewsNexus12 API path uses a 20 second timeout.
@@ -160,7 +170,7 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
   - `content`: `item["content:encoded"][0]` when available
 - The table only needs to show Title, News Source, and Description at this step, but the app should keep `link`, `pubDate`, and `content` in the article object for later pipeline steps.
 
-6. Article limit requirements
+7. Article limit requirements
 
 - Limit the articles used by the Lite table to the `ARTICLE_LIMIT_GOOGLE_RSS_SEARCH` dotenv value.
 - If `ARTICLE_LIMIT_GOOGLE_RSS_SEARCH` is missing, empty, not a positive integer, or otherwise invalid, default to `10`.
@@ -168,7 +178,7 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
 - The limited article set should become the working set for the rest of the demo pipeline.
 - The UI should not expose extra unshown articles through table pagination when they are beyond the configured limit.
 
-7. Response and UI state requirements
+8. Response and UI state requirements
 
 - On success, store the response in a shape equivalent to the NewsNexus12 portal response:
 
@@ -188,7 +198,7 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
 - Do not clear the previous successful table data until a new request succeeds, unless the user explicitly starts a new flow/reset action.
 - The Next button should become enabled only after the limited article working set has at least one article.
 
-8. Error handling requirements
+9. Error handling requirements
 
 - If Google News returns HTTP 503, show a rate-limit message that tells the user Google News RSS is temporarily unavailable and they should retry later.
 - For other non-OK RSS responses, show a request failed message and do not advance the flow.
@@ -196,7 +206,7 @@ The Lite Google RSS collection should imitate the interactive NewsNexus12 portal
 - If the request succeeds with zero parsed articles, keep the user on step 1 and show an empty-state message in the table area.
 - Error responses should not mutate the current working article set.
 
-9. Source files researched for this section
+10. Source files researched for this section
 
 - `/Users/nick/Documents/NewsNexus12/portal/src/app/(dashboard)/articles/get/google-rss/page.tsx`
 - `/Users/nick/Documents/NewsNexus12/portal/src/components/tables/TableNewsOrgsGoogleRssFeed.tsx`
