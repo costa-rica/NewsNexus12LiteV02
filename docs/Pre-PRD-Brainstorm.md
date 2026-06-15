@@ -932,6 +932,204 @@ Using the article's content from scraping or defaulting to the article descripti
 
 ### Flow Requirements: Nexus Semantic Rating
 
-[update this]
+The Lite Nexus Semantic Rating flow should imitate NewsNexus12 worker-node's `semanticScorer` workflow. In NewsNexus12, this workflow loads a permanent keyword workbook, embeds each article and keyword with a Hugging Face feature-extraction model, chooses the highest cosine-similarity keyword match per article, and writes only that best keyword/rating pair.
+
+1. Source flow to imitate
+
+- The source workflow is exposed by worker-node at `POST /semantic-scorer/start-job`.
+- The API project can proxy automation requests to this worker endpoint through `/news-orgs/automations/semantic-scorer/start-job`.
+- The route validates that `PATH_TO_SEMANTIC_SCORER_DIR` is configured.
+- The route validates that the semantic scorer directory exists.
+- The route validates that `NewsNexusSemanticScorerKeywords.xlsx` exists in that directory.
+- The route enqueues one job in the shared worker-node queue and returns `202` with `jobId`, `status`, and `endpointName`.
+- The route accepts optional article-id cursor targeting:
+  - `articleIdMinExclusive`
+  - `articleIdMaxInclusive`
+- In weekly orchestration, the semantic scorer receives only the cursor body and reruns over the articles in the current orchestration range.
+- The source job initializes the database models and verifies schema readiness before scoring.
+- The source job resolves the configured semantic scorer entity by finding `ArtificialIntelligence` where:
+  - `name`: `NewsNexusSemanticScorer02`
+  - `huggingFaceModelName`: `Xenova/paraphrase-MiniLM-L6-v2`
+  - `huggingFaceModelType`: `feature-extraction`
+- The source job finds the matching `EntityWhoCategorizedArticle` row.
+- The source job filters out articles that already have `ArticleEntityWhoCategorizedArticleContract` rows for that semantic scorer entity.
+- The source job scores remaining articles and upserts the best keyword score to `ArticleEntityWhoCategorizedArticleContract`.
+
+2. Lite ephemerality adjustment
+
+- The Lite demo should process the current in-memory working article set instead of selecting articles from the NewsNexus12 database.
+- The Lite demo should not query or write `Articles`, `ArticleApproveds`, `ArticleEntityWhoCategorizedArticleContract`, `ArtificialIntelligences`, `EntityWhoCategorizedArticle`, or any other durable table.
+- The Lite demo should not write `isRunningStatus.txt`, `lastRunCompleted.txt`, or any other status files.
+- The Lite demo should not create durable worker queue records.
+- Store each semantic rating only in the current in-memory article state.
+- Store per-run progress, selected keyword, score, skipped rows, timeouts, and failures only in current in-memory run state.
+- A new flow, page refresh, or reset should clear all Nexus Semantic Rating values and any user-edited keyword text.
+- The default semantic keyword list is permanent configuration for the Lite app and should survive restarts.
+- User-edited keyword text is not permanent and must not be saved to a database, file, local storage, browser storage, or any other persistent data solution.
+
+3. Keyword workbook and default keyword requirements
+
+- The Lite default keyword list should be taken from the NewsNexus12 semantic scorer workbook:
+  - `/Users/nick/Documents/_project_resources/NewsNexus12/utilities/semantic_scorer/NewsNexusSemanticScorerKeywords.xlsx`
+- The source worker expects the workbook filename to be `NewsNexusSemanticScorerKeywords.xlsx`.
+- The source worker reads only the first worksheet.
+- The current workbook's first worksheet is named `Keywords`.
+- The source worker skips row 1 as the header row.
+- The source worker reads column A only.
+- Blank rows and blank column-A values are ignored.
+- Each keyword is converted to a string and trimmed before use.
+- The source worker does not persist keyword edits made during a run.
+- The current workbook contains these 25 default keywords:
+  - consumer product safety
+  - cpsc safety alert
+  - hazardous product warning
+  - defective product injury
+  - product-related accident
+  - home safety hazards
+  - home safety
+  - child injury product
+  - fire hazard consumer product
+  - electric shock incident
+  - poisoning household product
+  - carbon monoxide poisoning product
+  - burn injury consumer product
+  - burn injury
+  - choking hazard
+  - laceration product defect
+  - mechanical failure injury
+  - mechanical injury
+  - electrical appliance fire
+  - sports equipment injury
+  - toxic household chemicals
+  - playground equipment accident
+  - electrical fire
+  - playground accident
+  - toxic chemical
+
+4. Editable keyword section requirements
+
+- On the Nexus Semantic Rating page, show a keyword section below the articles table before the user clicks Start Rating.
+- The section should display the current keyword list that will be used for scoring.
+- The section should initialize from the permanent default keyword list on every new flow.
+- The user may edit the keyword list before clicking Start Rating.
+- The UI may use a multiline textarea, editable list, or keyword chips, as long as the user can add, remove, and edit keywords.
+- The Start Rating run must use the current edited keyword list.
+- Once a run starts, disable keyword editing until the run finishes, fails, or is cancelled.
+- Edited keywords should live only in current page/run state.
+- Starting a new flow should restore the default keyword list.
+- Resetting the flow should restore the default keyword list.
+- Refreshing the page should restore the default keyword list unless a later PRD requirement adds an explicit draft-saving feature.
+- The run should trim every keyword before scoring and ignore blank keyword entries.
+- If the edited keyword list has zero non-blank keywords, do not start the scorer. Show a warning that at least one keyword is required.
+- The keyword list used for a completed run may be kept in current in-memory run state so the UI can show what was used for that run.
+- Do not write edited keywords back to the Excel workbook or any durable app configuration.
+
+5. Hugging Face model and scoring requirements
+
+- Use `@huggingface/transformers`, matching the source worker-node package.
+- The model task must be `feature-extraction`.
+- The model must match the source worker: `Xenova/paraphrase-MiniLM-L6-v2`.
+- The embedder should be created lazily and reused during the same runtime, matching the source `getEmbedder` behavior.
+- The Lite app should expose model-loading state because the first run may take noticeable time.
+- Embed article text with:
+  - `pooling`: `mean`
+  - `normalize`: `true`
+- Embed each keyword with:
+  - `pooling`: `mean`
+  - `normalize`: `true`
+- Compute cosine similarity between the article vector and each keyword vector.
+- Select the keyword with the highest similarity score for each article.
+- If the best score is negative or no keyword can be selected, treat the article as having no semantic score.
+- Store only the best keyword and best score for each article, not the full per-keyword score list.
+- The in-memory score object should be equivalent to the source persisted shape:
+
+```json
+{
+	"article_id": "<local article id>",
+	"keyword": "<best matching keyword>",
+	"keywordRating": "<best cosine similarity score>"
+}
+```
+
+6. Input article text requirements
+
+- The source worker's `pickArticleText` function prefers `article.description`, then falls back to `article.title`.
+- The source worker's candidate builder uses `ArticleApproveds[0].textForPdfReport` only when `article.description` is missing or blank.
+- For the Lite demo, preserve the source scoring algorithm while using the richer current in-memory flow data:
+  - Prefer successful scraped article content when available.
+  - Fall back to the article description when scraped content is missing, failed, blank, or unusable.
+  - Fall back to the article title when both scraped content and description are blank.
+- Trim article text before scoring.
+- If no usable article text remains after trimming, skip that article and leave its Nexus Semantic Rating unset.
+- Use the table row's local article id as the `article_id` equivalent for in-memory score mapping.
+- If the user starts semantic rating more than once during the same flow, skip rows that already have an in-memory Nexus Semantic Rating unless the UI explicitly provides a rerun/reset action.
+
+7. In-memory write and output requirements
+
+- The full source worker writes best scores with `ArticleEntityWhoCategorizedArticleContract.upsert`.
+- The Lite `write` equivalent should apply the best keyword and rating back to matching in-memory table rows.
+- Do not mutate earlier Google RSS, scrape, Nexus Location Rating, or State (AI Assigned) fields while writing semantic scores.
+- The output of this step is the same working table with the `Nexus Semantic Rating` column populated for rows that received a valid best score.
+- Store at least these fields in the current article state:
+  - `semanticRatingMax`
+  - `semanticRatingMaxLabel`
+  - `semanticRatingStatus`
+  - `semanticRatingError`
+- `semanticRatingMax` should hold the best cosine-similarity score.
+- `semanticRatingMaxLabel` should hold the best matching keyword.
+- Failed or skipped rows should preserve an unset score and current-run diagnostic status only in memory.
+
+8. Table display requirements
+
+- Display each computed Nexus Semantic Rating as a percentage in a colored circle, following `portal/src/components/tables/TableReviewArticles.tsx`.
+- Convert the score to a percentage with `Math.round(score * 100)`.
+- Normalize the display score to `0..1` before computing color.
+- Higher values should appear greener.
+- Lower values should appear duller/darker.
+- Use a compact circular cell with centered text, matching the existing `Nexus Location Rating` and `Nexus Semantic Rating` visual pattern.
+- Before the rating run starts, `Nexus Semantic Rating` cells should remain empty.
+- After the rating run completes, rows skipped because no usable text or no valid score exists should show `N/A` or an equivalent non-score state.
+- If the UI includes a semantic details modal or tooltip, it should show the best matching keyword and current-run status. These details should not be persisted.
+- Sorting should treat unset or skipped semantic ratings as last if table sorting is enabled.
+
+9. Runtime and progress requirements
+
+- When the user clicks Start Rating, set the semantic rating step to running and disable Start Rating until the run finishes, fails, or is cancelled.
+- Disable the Next or Finish action while semantic rating is running.
+- Process articles sequentially to match the source worker loop.
+- The source worker applies a per-article iteration timeout of `10000ms`. The Lite demo should use `10000ms` as the default per-article timeout unless a later PRD requirement adds configuration.
+- If an article times out, skip that article, record the timeout in memory, and continue processing later articles.
+- If an article-level embedding or scoring call fails, record the current-run error in memory and continue processing later articles.
+- Show progress as articles are processed, including the current row count out of the eligible row count.
+- The source worker logs progress every `100` articles and writes status files. The Lite demo should show progress in UI state instead of writing files.
+- If the run completes with at least one valid semantic rating, mark the step as completed.
+- If every article fails or is skipped, keep the user on the Nexus Semantic Rating step and show a clear failed or empty-result state.
+- If the run completes with a mix of valid ratings and failures, allow the demo flow to finish while keeping failed rows visible as unset or `N/A`.
+
+10. Error handling requirements
+
+- If the permanent default keyword list cannot be loaded, show a setup error and keep Start Rating disabled.
+- If the model fails to load, mark the run as failed and leave existing table ratings unchanged.
+- If the edited keyword list has no non-blank values, do not call the model.
+- If scoring fails before any in-memory write occurs, do not partially populate new ratings from that failed attempt unless the implementation intentionally writes per-row successes as they complete.
+- If scoring writes per-row successes as they complete, failures should not clear successful ratings already produced during the same run.
+- A cancelled run should stop processing and preserve only completed row scores that were already intentionally applied before cancellation.
+- Log or surface failure details enough for demo debugging, but do not persist those details.
+
+11. Source files and artifacts researched for this section
+
+- `/Users/nick/Documents/NewsNexus12/worker-node/package.json`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/routes/semanticScorer.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/jobs/semanticScorerJob.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/docs/worker-node-api-documentation/endpoints/semantic-scorer.md`
+- `/Users/nick/Documents/NewsNexus12/worker-node/tests/routes/semanticScorer.test.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/tests/modules/semanticScorerJob.test.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/orchestrator/coordinator.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/routes/newsOrgs/automations.ts`
+- `/Users/nick/Documents/NewsNexus12/api/src/routes/analysis/state-assigner.ts`
+- `/Users/nick/Documents/NewsNexus12/portal/src/components/tables/TableReviewArticles.tsx`
+- `/Users/nick/Documents/NewsNexus12/worker-node/AGENTS.md`
+- `/Users/nick/Documents/NewsNexus12/worker-node/README.md`
+- `/Users/nick/Documents/_project_resources/NewsNexus12/utilities/semantic_scorer/NewsNexusSemanticScorerKeywords.xlsx`
 
 ---
