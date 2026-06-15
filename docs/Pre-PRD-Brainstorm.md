@@ -215,7 +215,195 @@ Scrape full article content from the URLs identified in the search step, using t
 
 ### Flow Requirements: Scraping
 
-[update this]
+The Lite scraping flow should imitate NewsNexus12 worker-node's active `article-content-scraper-02` workflow. In NewsNexus12, this workflow treats the URL from Google RSS as a Google-owned article URL first, resolves that URL to the real publisher URL, then fetches and parses the publisher page for usable article text.
+
+1. Source flow to imitate
+
+- The source workflow is exposed by worker-node at `POST /article-content-scraper-02/start-job`.
+- The route validates article-targeting input, enqueues one job in the shared worker queue, and returns a queued job response with `jobId`, `status`, and `endpointName`.
+- The job initializes the database models, selects target articles, then calls the shared ArticleContents02 enrichment module.
+- The source worker can select articles broadly by age/count or process explicit `articleIds`. For the Lite demo, process the articles already present in the Google RSS table instead of running broad database targeting.
+- The source workflow is sequential. It processes one article at a time and respects cancellation through `AbortSignal`.
+- The source workflow writes outcomes to `ArticleContents02`. For the Lite demo, store equivalent scrape outcomes in the table's in-memory article state, with enough detail to open the scraped-content modal.
+
+2. Worker-node packages and libraries
+
+- `express`: exposes the worker HTTP routes, including `/article-content-scraper-02/start-job`.
+- `@newsnexus/db-models`: reads `Articles` and persists `ArticleContents02` rows in the full app.
+- `playwright`: launches headless Chromium for Google News navigation and publisher-page fallback rendering.
+- `cheerio`: parses publisher HTML and extracts the article title/body text.
+- Native `fetch`: performs direct publisher HTTP requests before using browser fallback.
+- `winston`: logs workflow, retry, skip, and persistence details.
+- `dotenv`: loads worker runtime configuration.
+- `typescript`, `tsx`, `jest`, `ts-jest`, and `supertest`: support worker development and tests.
+- `xml2js` and `exceljs`: are part of worker-node and are used by the Google RSS ingestion workflow, not by the active article-content scraper itself.
+- `@huggingface/transformers`: is part of worker-node for semantic scoring, not scraping.
+- `puppeteer`: is still listed in `worker-node/package.json`, and some README text references it, but the active ArticleContents02 scraper imports and uses Playwright Chromium. The Lite scraping implementation should follow the Playwright-based code path unless the project intentionally changes this later.
+
+3. Input article requirements
+
+- Each article entering the scrape step should include:
+  - `title`
+  - `description`
+  - `link` or `url`
+  - `source`
+  - optional `pubDate`
+  - optional RSS `content`
+- Treat the Google RSS article URL as the `googleRssUrl`.
+- If RSS `content` already exists and is at least `200` characters after cleanup, the Lite flow may mark the article as scraped from `rss-feed` without visiting the publisher. This mirrors the NewsNexus12 request-google-rss follow-up behavior.
+- If RSS `content` is missing or shorter than `200` characters, run the Google-to-publisher scrape flow.
+- If an article has no URL, mark it as skipped or failed with a clear message and do not block scraping the remaining articles.
+
+4. Google News gatekeeping and publisher URL discovery
+
+- Use Playwright Chromium to open the Google RSS article URL before fetching the publisher page.
+- Create the browser context with a desktop Chrome-style user agent, `en-US` locale, `1440x900` viewport, and browser-like `Accept` / `Accept-Language` headers.
+- Wait for `domcontentloaded`, then wait briefly after load before reading the page. The source worker uses:
+  - Google navigation timeout: `30000ms`
+  - Google post-load wait: `5000ms`
+  - Google navigation retry count: `2`
+- Classify the loaded Google page before trusting it. Treat the page as blocked when the final URL or HTML includes known Google/anti-bot patterns such as:
+  - `consent.google.com`
+  - `before you continue to google`
+  - `to continue, please click`
+  - `personalized content`
+  - `consent bump`
+  - `privacy & terms`
+  - `access to this page has been denied`
+  - `px-captcha`
+  - `press & hold to confirm you are`
+  - `human verification challenge`
+  - `captcha.px-cloud.net`
+- Also treat a generic Google News shell page as blocked when it contains Google News "stories for you" style content but no usable publisher metadata.
+- The workflow should not try to solve captchas, click consent screens, or fake human verification. It should detect those outcomes, mark the scrape as failed, and preserve diagnostic details.
+- After a non-blocked Google navigation, prefer the final browser URL if it is no longer Google-owned.
+- If the final URL is still Google-owned, extract the publisher URL from the Google page in this order:
+  - canonical link
+  - `og:url`
+  - JSON-LD `url` or `mainEntityOfPage`
+  - first usable non-Google visible link
+- Reject publisher URL candidates that are still owned by Google, including `google.com`, `www.google.com`, `news.google.com`, and `consent.google.com`.
+- If no non-Google publisher URL is found, mark the scrape as failed with `no_publisher_url_found`.
+
+5. Publisher fetching requirements
+
+- Fetch the discovered publisher URL with direct HTTP first.
+- Use browser-style headers and follow redirects.
+- Classify the publisher response for blocked or anti-bot pages before parsing it.
+- Treat the publisher response as blocked when it matches known Google/anti-bot patterns or multiple challenge indicators such as:
+  - `access to this page has been denied`
+  - `press & hold to confirm you are`
+  - `before we continue...`
+  - `human verification challenge`
+  - `please check your network connection or disable your ad-blocker`
+  - `reference id`
+- Treat publisher HTML as incomplete if it is shorter than `500` characters or asks the user to enable JavaScript/cookies.
+- If direct HTTP returns usable HTML, parse it immediately and do not open the publisher page in Playwright.
+- If direct HTTP returns incomplete HTML, fall back to Playwright using the same browser context.
+- If direct HTTP throws, retry the publisher fetch attempt. If all attempts throw, record `publisher_fetch_error`.
+- The source worker uses these publisher settings:
+  - Publisher navigation timeout: `20000ms`
+  - Publisher post-load wait: `2500ms`
+  - Publisher fetch retry count: `2`
+- If Playwright does not improve the publisher HTML, keep the better direct HTTP result and record that fallback did not improve the page.
+- If all publisher attempts fail, record `publisher_fetch_error`.
+
+6. Article parsing requirements
+
+- Parse publisher HTML with Cheerio-style DOM parsing.
+- Remove non-content elements before extracting text:
+  - `script`
+  - `style`
+  - `noscript`
+  - `nav`
+  - `header`
+  - `footer`
+  - `svg`
+- Extract the title in this order:
+  - `meta[property="og:title"]`
+  - first `h1`
+  - document `title`
+- Extract body text from paragraph tags first.
+- Keep paragraphs that are at least `20` characters.
+- Join accepted paragraphs with blank lines, then normalize whitespace.
+- If no useful paragraph text exists, fall back to normalized body text.
+- Treat parsed content shorter than `200` characters as `short_content`.
+
+7. Scrape result requirements for the Lite table
+
+- Each article should receive a scrape result object that can populate the `Scraped` column and modal.
+- Store at least these fields in local state:
+  - `articleId` or local row id
+  - `googleRssUrl`
+  - `googleFinalUrl`
+  - `publisherUrl`
+  - `publisherFinalUrl`
+  - `title`
+  - `content`
+  - `status`: `success` or `fail`
+  - `failureType`
+  - `details`
+  - `extractionSource`
+  - `bodySource`
+  - `googleStatusCode`
+  - `publisherStatusCode`
+- Use the same failure type vocabulary as worker-node:
+  - `blocked_google`
+  - `blocked_publisher`
+  - `no_publisher_url_found`
+  - `navigation_error`
+  - `publisher_fetch_error`
+  - `short_content`
+- Use the same extraction source vocabulary as worker-node:
+  - `final-url`
+  - `canonical`
+  - `og:url`
+  - `json-ld`
+  - `fallback-link`
+  - `none`
+- Use the same body source vocabulary as worker-node:
+  - `rss-feed`
+  - `direct-http`
+  - `playwright-publisher`
+  - `google-page`
+  - `none`
+- Show a check mark in the `Scraped` column only when `status` is `success` and content is at least `200` characters.
+- The check mark should open a modal showing the scraped title, publisher URL, body source, extraction source, and article content.
+- Failed scrapes should leave the visible `Scraped` cell blank or show a non-success state only if the final design calls for visible failure diagnostics. The failure details should remain available in developer state/logs for later debugging.
+
+8. Runtime and processing requirements
+
+- Process articles sequentially to match the source workflow and reduce browser pressure.
+- Apply a per-article timeout. The source worker default is `ARTICLE_CONTENT_02_ARTICLE_TIMEOUT_MS`, defaulting to `90000ms` with a minimum allowed value of `10000ms`.
+- Reuse a Chromium session across articles instead of launching a new browser for every article.
+- Recycle the browser session after a configured number of attempts or navigation errors. The source defaults are:
+  - `ARTICLE_CONTENT_02_BROWSER_RECYCLE_ATTEMPTS`: `25`
+  - `ARTICLE_CONTENT_02_BROWSER_RECYCLE_NAVIGATION_ERRORS`: `3`
+- Continue processing later articles when one article fails.
+- Summarize the run with counts equivalent to the source workflow:
+  - articles considered
+  - articles skipped
+  - successful scrapes
+  - failed scrapes
+- The Lite UI should keep the Next button disabled while scraping is running and enable it after the scrape run completes, even if some articles failed.
+
+9. Source files researched for this section
+
+- `/Users/nick/Documents/NewsNexus12/worker-node/package.json`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/routes/articleContentScraper02.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/jobs/articleContentScraper02Job.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/config.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/enrichment.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/googleNavigator.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/googleClassifier.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/publisherExtractor.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/publisherFetcher.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/publisherClassifier.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/articleParser.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/navigationSessionManager.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/persistence.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/repository.ts`
+- `/Users/nick/Documents/NewsNexus12/worker-node/src/modules/article-content-02/types.ts`
 
 ---
 
