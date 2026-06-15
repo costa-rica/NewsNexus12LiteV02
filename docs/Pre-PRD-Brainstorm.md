@@ -71,6 +71,10 @@ Allow users to search for and retrieve candidate articles from Google News RSS.
 - "State (AI Assigned)" (empty)
 - "Nexus Semantic Rating" (empty)
 
+### Description of the Google RSS collection
+
+[update this]
+
 ---
 
 ## 2. Scraping Section
