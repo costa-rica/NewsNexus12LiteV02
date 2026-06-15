@@ -29,7 +29,7 @@ export function FlowIndicator({ canAdvance = false }: FlowIndicatorProps) {
       className="mx-auto w-full max-w-7xl px-4 pb-4 sm:px-6 lg:px-8"
       aria-label="Pipeline progress"
     >
-      <div className="flex flex-col gap-4 border-y border-gray-200/80 bg-white/70 px-4 py-4 shadow-theme-sm backdrop-blur dark:border-white/10 dark:bg-gray-950/45 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-lg border border-gray-200/80 bg-white/70 px-4 py-4 shadow-theme-sm backdrop-blur dark:border-white/10 dark:bg-gray-950/45 sm:flex-row sm:items-center sm:justify-between">
         <ol className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-5">
           {PIPELINE_STAGES.map((stage, index) => {
             const isCurrent = stage.key === state.currentStage;

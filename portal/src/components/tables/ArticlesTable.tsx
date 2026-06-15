@@ -34,7 +34,7 @@ export function ArticlesTable({ articles }: ArticlesTableProps) {
       className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-8"
       aria-label="Article table"
     >
-      <div className="overflow-hidden border border-gray-200 bg-white/80 shadow-theme-md backdrop-blur dark:border-white/10 dark:bg-gray-950/55">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white/80 shadow-theme-md backdrop-blur dark:border-white/10 dark:bg-gray-950/55">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] table-fixed">
             <thead className="bg-gray-50 text-left dark:bg-gray-900/70">
