@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
 import React from "react";
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
 
 interface MockImageProps
   extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, "src"> {
@@ -16,3 +17,7 @@ vi.mock("next/image", () => ({
       alt,
     }),
 }));
+
+afterEach(() => {
+  cleanup();
+});
