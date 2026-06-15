@@ -1,5 +1,6 @@
 "use client";
 
+import { ScrapeBar } from "@/components/scrape/ScrapeBar";
 import { useFlow } from "@/state/FlowContext";
 
 import { SearchBar } from "./SearchBar";
@@ -7,9 +8,13 @@ import { SearchBar } from "./SearchBar";
 export function StageActionArea() {
   const { state } = useFlow();
 
-  if (state.currentStage !== "search") {
-    return null;
+  if (state.currentStage === "search") {
+    return <SearchBar />;
   }
 
-  return <SearchBar />;
+  if (state.currentStage === "scrape") {
+    return <ScrapeBar />;
+  }
+
+  return null;
 }
