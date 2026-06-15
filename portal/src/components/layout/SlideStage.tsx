@@ -28,12 +28,18 @@ export function SlideStage({ children }: SlideStageProps) {
 
   return (
     <main
-      data-testid="slide-stage"
-      data-current-stage={state.currentStage}
-      className="slide-stage overflow-hidden text-gray-900 dark:text-white"
+      className="slide-stage-shell text-gray-900 dark:text-white"
       style={style}
     >
-      <div className="slide-stage__content">{children}</div>
+      <section
+        data-testid="slide-stage"
+        data-current-stage={state.currentStage}
+        className="slide-stage"
+      >
+        <div className="slide-stage__viewport">
+          <div className="slide-stage__content">{children}</div>
+        </div>
+      </section>
     </main>
   );
 }
