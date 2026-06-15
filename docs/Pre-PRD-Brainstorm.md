@@ -479,7 +479,162 @@ Using the article's content from scraping or defaulting to the article descripti
 
 ### Flow Requirements: Nexus Location Rating
 
-[update this]
+The Lite Nexus Location Rating flow should imitate NewsNexus12 worker-python's `location_scorer` workflow. In NewsNexus12, this workflow loads articles that have not yet been scored by the configured location-scoring AI entity, runs a Hugging Face zero-shot classifier, and writes the U.S.-location probability as an article/category contract score.
+
+1. Source flow to imitate
+
+- The source workflow is exposed by worker-python at `POST /location-scorer/start-job`.
+- The route accepts an optional `limit`, forbids unknown JSON fields, enqueues one queue job, and returns `202` with `jobId`, `status`, and `endpointName`.
+- The queued runner builds `LocationScorerConfig` from environment variables, creates `LocationScorerRepository`, then runs `LocationScorerOrchestrator.run_score`.
+- The orchestrator runs three ordered steps:
+  - `load`
+  - `classify`
+  - `write`
+- The source queue stores progress fields such as `workflow`, `summaryStatus`, `limit`, `completedStepCount`, `currentStep`, `currentStepStatus`, and `currentStepProcessed`.
+- The full NewsNexus12 worker uses Postgres to find the configured `EntityWhoCategorizedArticles` row for `NAME_AI_ENTITY_LOCATION_SCORER`, then loads unscored articles from `Articles` where no matching `ArticleEntityWhoCategorizedArticleContracts` row exists.
+- The full NewsNexus12 worker writes scores to `ArticleEntityWhoCategorizedArticleContracts` with:
+  - `articleId`
+  - `entityWhoCategorizesId`
+  - `keyword`
+  - `keywordRating`
+  - `createdAt`
+  - `updatedAt`
+- The Lite demo should use the source queue and database behavior as flow context only.
+
+2. Lite ephemerality adjustment
+
+- The Lite demo should not read target articles from the NewsNexus12 `Articles` table.
+- The Lite demo should not query `ArtificialIntelligences`, `EntityWhoCategorizedArticles`, or `ArticleEntityWhoCategorizedArticleContracts`.
+- The Lite demo should not write location ratings to `ArticleEntityWhoCategorizedArticleContracts` or any other durable table.
+- The Lite demo should not save location scores, classification labels, classifier responses, run summaries, queue logs, or job records to a database, files, local storage, browser storage, or any other persistent data solution.
+- Store each computed Nexus Location Rating only in the current in-memory article state.
+- Store step status, progress counts, skipped counts, and failure details only in current in-memory run state.
+- A new flow, page refresh, or reset should clear all Nexus Location Rating values and related run state.
+- If a future implementation uses an API route for this step, that route should return results for the current request only and should not create durable scoring records.
+
+3. Worker-python packages and model requirements
+
+- The source worker-python app includes `transformers==5.2.0` and uses `transformers.pipeline`.
+- The classifier task must be `zero-shot-classification`.
+- The model must match the source worker: `facebook/bart-large-mnli`.
+- The classifier should be created lazily when the rating step starts, matching the source `_get_classifier` behavior.
+- The classifier instance may be reused within the same runtime so the model is not reloaded for every article.
+- The Lite app should expose the model-loading state in the UI because the first run may take noticeable time.
+- The classifier labels must match the source worker exactly:
+  - `Occurred in the United States`
+  - `Occurred outside the United States`
+- The score stored in the table must be the score attached to `Occurred in the United States`, not simply the first returned score and not whichever label wins overall.
+
+4. Input article requirements
+
+- The rating step should process the current in-memory working article set produced by the Google RSS and scraping steps.
+- The Start Rating action should be disabled until the working article set has at least one article.
+- The source worker only loads `id`, `title`, and `description` from Postgres. For the Lite demo, preserve the same title-plus-text classification shape while honoring this section's demo goal:
+  - Put the article title first.
+  - Prefer successful scraped article content when available.
+  - Fall back to the article description when scraped content is missing, failed, or blank.
+  - Fall back to RSS `content` only when it exists in the current in-memory article object and no successful scraped content is available.
+- The classifier input text should be assembled as:
+
+```text
+<title>
+
+<best available article text>
+```
+
+- Trim blank title and body text before classification.
+- If both title and best available article text are blank after trimming, skip that article and leave its Nexus Location Rating unset.
+- Use the table row's local article id as the `article_id` equivalent for in-memory score mapping.
+- If the user starts rating more than once during the same flow, mimic the source `get_unscored_articles` behavior by skipping rows that already have an in-memory Nexus Location Rating unless the UI explicitly offers a rerun/reset action.
+- The Lite UI does not need to expose the source worker's optional `limit`; the effective limit is the current in-memory article set already bounded by the Google RSS step.
+
+5. Classification requirements
+
+- Process articles sequentially, matching the source processor loop.
+- Before classification starts, initialize a run summary with:
+  - mode: `score`
+  - status: `running`
+  - steps: `load`, `classify`, `write`
+- The Lite `load` step should collect eligible in-memory rows and count them.
+- The Lite `classify` step should call the Hugging Face zero-shot classifier for each eligible article.
+- For every classified article, produce an in-memory score object equivalent to the source shape:
+
+```json
+{
+	"article_id": "<local article id>",
+	"score": "<number between 0 and 1>",
+	"rating_for": "Occurred in the United States"
+}
+```
+
+- Clamp the displayed rating between `0` and `1` if needed, but keep the raw classifier score available in in-memory state for the current flow.
+- Count skipped articles separately from processed articles.
+- If the classifier response does not include the `Occurred in the United States` label, treat the run as failed with a clear message. This mirrors the source worker's `US label missing from classifier result` failure path.
+- The Lite app should not store or display the `Occurred outside the United States` score unless a later PRD requirement explicitly adds diagnostic details.
+
+6. In-memory write requirements
+
+- The Lite `write` step should apply the generated score objects back to the matching in-memory table rows.
+- The full source worker writes in batches using `LOCATION_SCORER_BATCH_SIZE`, default `10`. The Lite demo may apply in-memory updates row-by-row or as one state update, but the run summary should still treat this as the `write` step.
+- The full source worker counts duplicate database inserts. The Lite demo should not need durable duplicate detection; rows skipped because they already have an in-memory rating should be counted as skipped or already-rated rows.
+- Do not mutate earlier Google RSS or scrape fields while writing location scores.
+- The output of this step is the same working table with the `Nexus Location Rating` column populated for classified rows.
+
+7. Table display requirements
+
+- Display each computed Nexus Location Rating as a percentage in a colored circle, following `portal/src/components/tables/TableReviewArticles.tsx`.
+- Convert the classifier score to a percentage with `Math.round(score * 100)`.
+- Use the same general color mapping as the portal table:
+  - Normalize the score to `0..1`.
+  - Compute green intensity from the normalized score.
+  - Higher values should appear greener.
+  - Lower values should appear duller/darker.
+- Use a compact circular cell with centered text, matching the existing `Nexus Semantic Rating` and `Nexus Location Rating` visual pattern.
+- Before the rating run starts, the `Nexus Location Rating` cells should remain empty.
+- After the rating run completes, rows skipped because no usable text exists should show `N/A` or an equivalent non-score state instead of a percentage.
+- Sorting should treat unset or skipped ratings as last if the table supports sorting at this step.
+
+8. Runtime and UI state requirements
+
+- When the user clicks Start Rating, set the step to running and disable Start Rating until the run finishes or fails.
+- Disable the Next button while the rating run is running.
+- Show progress that maps to the source steps:
+  - loading candidate rows
+  - classifying articles
+  - applying scores
+- During classification, show at least the number of processed articles out of the eligible article count.
+- If the run completes with at least one classified article, enable the Next button.
+- If the run completes with zero classified articles because every article was skipped, keep the user on this step and show a clear empty-result message.
+- If some articles are skipped but at least one article is classified, allow the flow to continue and keep skipped rows visible.
+- If the model is still loading, show a loading state that is distinct from article classification progress.
+
+9. Error and cancellation requirements
+
+- If model loading fails, mark the run as failed and leave existing table ratings unchanged.
+- If classification fails before the Lite write step starts, do not partially populate new ratings from that failed attempt.
+- If classification fails for one article because the classifier response is malformed, fail the run rather than silently assigning a misleading score.
+- If an article has blank usable text, skip only that article and continue processing later rows.
+- If the user cancels or resets during the run, stop processing and clear in-progress run state for the current step.
+- A cancelled run should not enable the Next button unless there was a previous completed rating run still represented in the current in-memory table state.
+- Log or surface failure details enough for demo debugging, but do not persist those details.
+
+10. Source files researched for this section
+
+- `/Users/nick/Documents/NewsNexus12/worker-python/requirements.txt`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/routes/location_scorer.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/config.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/types.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/orchestrator.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/repository.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/processors/load.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/processors/classify.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/src/modules/location_scorer/processors/write.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/tests/unit/location_scorer/test_classify_processor.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/tests/unit/location_scorer/test_orchestrator.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/tests/unit/location_scorer/test_repository.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/tests/integration/test_location_scorer_routes.py`
+- `/Users/nick/Documents/NewsNexus12/worker-python/tests/contracts/location_scorer_contract_spec.json`
+- `/Users/nick/Documents/NewsNexus12/portal/src/components/tables/TableReviewArticles.tsx`
 
 ---
 
