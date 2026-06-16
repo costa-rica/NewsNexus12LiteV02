@@ -1,6 +1,6 @@
 ---
 created_at: 2026-06-15
-updated_at: 2026-06-15
+updated_at: 2026-06-16
 created_by: claude (opus-4.8)
 modified_by: codex (gpt-5)
 ---
@@ -58,6 +58,15 @@ V02, so **no plan V03 required**):
 - `portal/src/app/page.tsx` — composes `<SlideStage><TopBar/><FlowIndicatorBar/>
   <StageActionArea/><ArticlesTable/></SlideStage>`; `page.test.tsx` placement/Next locks
   **must still pass**.
+
+## Cross-cutting: Logging & Error Handling (added after initial completion)
+
+This stage's tasks were checked off before the project Logging/Error-Handling standard
+existed (`AGENTS.md`; `docs/LOGGING_NODE_JS_V08.md`, `docs/ERROR_REQUIREMENTS.md`). Rather
+than re-opening the completed phases, compliance is tracked as an explicit **blocking
+remediation gate — see Phase 9 below**, which **must pass before the stage-3 changes are
+committed** (even though Phase 8 is already checked). Any further edits here must not add
+`console.*` in committed server code or non-standard error response shapes.
 
 ## OUT OF SCOPE for this stage — do NOT implement (hard guardrails)
 
@@ -277,3 +286,39 @@ Create under `worker-node/src/modules/article-content-02/`:
       `co-authored-by: <agent name> (<model>)`.
 - [x] Do **not** push. Do **not** start stage 4 (Location) — stop after the stage 3 commit
       per `docs/20260615_build_sequence.md`.
+
+---
+
+## Phase 9 — Logging & Error Handling remediation (BLOCKS the stage-3 commit)
+
+> Added after initial completion to enforce the `AGENTS.md` Logging & Error Handling
+> standard. **The stage-3 changes must not be committed until every box here is checked**,
+> regardless of Phase 8 being marked complete. This work may be executed as the
+> scrape-specific slice of the dedicated logging/errors cycle, but its gate lives here.
+
+- [ ] **worker-node logger**: initialize a singleton Winston logger per
+      `docs/LOGGING_NODE_JS_V08.md` (created before any other app code; required-env
+      validation for `NODE_ENV`/`NAME_APP`/`PATH_TO_LOGS` with fatal exit on missing;
+      daily-rotate `{NAME_APP}-YYYY-MM-DD.log` naming). Reconcile the existing
+      `worker-node/src/logger.ts` into it.
+- [ ] **No `console.*`** in committed worker-node server code (registry, runner, scrape
+      modules, routes, server bootstrap) — use the logger. Never log secrets or full
+      article bodies (log ids, counts, statuses, failure types).
+- [ ] **portal logging**: scrape proxy route handlers (`api/worker/...`) and any server
+      code log via `portal/src/lib/serverLogger.ts`; no `console.*` in committed server
+      code.
+- [ ] **shared error helper** in each app producing the standard envelope
+      `{ error: { code, message, details?, status } }`; `details` only when
+      `NODE_ENV === "development"`.
+- [ ] **error envelopes on every endpoint** added by this stage: worker
+      `POST /article-content-scraper-02/start-job`, generic `GET /jobs/:jobId` (e.g.
+      `NOT_FOUND` 404 for unknown id) and `POST /jobs/:jobId/cancel`, and the portal proxy
+      routes. Map validation → `VALIDATION_ERROR` 400; unexpected → `INTERNAL_ERROR` 500.
+      Log detail server-side, return sanitized envelope.
+- [ ] **tests**: at least one representative worker error response (e.g. unknown-job 404
+      envelope, validation 400) and one portal proxy error response assert the standard
+      envelope shape.
+
+### End-of-phase checks (Phase 9)
+- [ ] worker-node + portal: type-check · lint · test · build pass.
+- [ ] Only after all boxes above are checked may the stage-3 changes be committed (Phase 8).
