@@ -57,6 +57,26 @@ export interface ScrapeRunStatus {
   summary: ScrapeRunSummary;
 }
 
+export interface LocationScore {
+  article_id: ArticleId;
+  score: number;
+}
+
+export interface LocationRunSummary {
+  eligible: number;
+  processed: number;
+  skipped: number;
+  // 1 while the model is loading, 0 otherwise.
+  modelLoading: number;
+}
+
+export interface LocationRunStatus {
+  status: "idle" | "running" | "completed" | "failed" | "cancelled";
+  processed: number;
+  total: number;
+  summary: LocationRunSummary;
+}
+
 /**
  * Reserved stage 5 state assignment shape. It is intentionally minimal here so
  * stage 1 does not pre-build AI assignment behavior.
@@ -84,4 +104,5 @@ export interface FlowState {
   currentStage: StageKey;
   articles: Article[];
   scrapeRun?: ScrapeRunStatus;
+  locationRun?: LocationRunStatus;
 }

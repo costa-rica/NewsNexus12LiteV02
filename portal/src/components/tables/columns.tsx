@@ -53,12 +53,18 @@ export const articleColumns = [
   columnHelper.accessor("locationRating", {
     id: "locationRating",
     header: "Nexus Location Rating",
-    cell: ({ getValue }) => (
-      <RatingCircle
-        score={getValue()}
-        ariaLabel="Nexus Location Rating"
-      />
-    ),
+    cell: ({ getValue }) => {
+      const value = getValue();
+
+      // null = skipped (no usable text) -> N/A; undefined = not yet run -> empty.
+      if (value === null) {
+        return (
+          <span className="block text-center text-xs text-gray-400">N/A</span>
+        );
+      }
+
+      return <RatingCircle score={value} ariaLabel="Nexus Location Rating" />;
+    },
   }),
   columnHelper.accessor("stateAssignment", {
     id: "stateAssignment",

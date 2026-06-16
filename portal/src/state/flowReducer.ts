@@ -1,6 +1,8 @@
 import type {
   Article,
   FlowState,
+  LocationRunStatus,
+  LocationScore,
   ScrapeResult,
   ScrapeRunStatus,
   StageKey,
@@ -11,6 +13,8 @@ export type FlowAction =
   | { type: "setArticles"; articles: Article[] }
   | { type: "setScrapeRun"; scrapeRun: ScrapeRunStatus }
   | { type: "applyScrapeResults"; results: ScrapeResult[] }
+  | { type: "setLocationRun"; locationRun: LocationRunStatus }
+  | { type: "applyLocationRatings"; scores: LocationScore[]; skippedIds: string[] }
   | { type: "resetFlow" };
 
 export function createInitialFlowState(): FlowState {
@@ -38,6 +42,17 @@ export function applyScrapeResults(results: ScrapeResult[]): FlowAction {
   return { type: "applyScrapeResults", results };
 }
 
+export function setLocationRun(locationRun: LocationRunStatus): FlowAction {
+  return { type: "setLocationRun", locationRun };
+}
+
+export function applyLocationRatings(
+  scores: LocationScore[],
+  skippedIds: string[],
+): FlowAction {
+  return { type: "applyLocationRatings", scores, skippedIds };
+}
+
 export function resetFlow(): FlowAction {
   return { type: "resetFlow" };
 }
@@ -54,6 +69,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         ...state,
         articles: action.articles,
         scrapeRun: undefined,
+        locationRun: undefined,
       };
     case "setScrapeRun":
       return {
@@ -85,6 +101,30 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
               ...result,
             },
           };
+        }),
+      };
+    }
+    case "setLocationRun":
+      return {
+        ...state,
+        locationRun: action.locationRun,
+      };
+    case "applyLocationRatings": {
+      const scoreById = new Map(
+        action.scores.map((score) => [score.article_id, score.score]),
+      );
+      const skipped = new Set(action.skippedIds);
+
+      return {
+        ...state,
+        articles: state.articles.map((article) => {
+          if (scoreById.has(article.id)) {
+            return { ...article, locationRating: scoreById.get(article.id) ?? null };
+          }
+          if (skipped.has(article.id)) {
+            return { ...article, locationRating: null };
+          }
+          return article;
         }),
       };
     }

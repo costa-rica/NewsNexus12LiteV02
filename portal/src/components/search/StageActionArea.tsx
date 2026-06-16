@@ -1,5 +1,6 @@
 "use client";
 
+import { LocationBar } from "@/components/location/LocationBar";
 import { ScrapeBar } from "@/components/scrape/ScrapeBar";
 import { useFlow } from "@/state/FlowContext";
 
@@ -14,6 +15,10 @@ export function StageActionArea() {
 
   if (state.currentStage === "scrape") {
     return <ScrapeBar />;
+  }
+
+  if (state.currentStage === "location") {
+    return <LocationBar />;
   }
 
   return null;

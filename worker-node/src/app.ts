@@ -4,9 +4,12 @@ import { errorMiddleware } from "./http/errors.js";
 import { jobRouter } from "./jobs/routes.js";
 import type { ScrapeProcessor } from "./modules/article-content-02/enrichment.js";
 import { createArticleContentScraperRouter } from "./modules/article-content-02/routes.js";
+import { createLocationScorerRouter } from "./modules/location-scorer/routes.js";
+import type { LocationClassifier } from "./modules/location-scorer/types.js";
 
 interface CreateAppOptions {
   scrapeProcessor?: ScrapeProcessor;
+  locationClassifier?: LocationClassifier;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -22,6 +25,11 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(
     createArticleContentScraperRouter({
       processArticle: options.scrapeProcessor,
+    }),
+  );
+  app.use(
+    createLocationScorerRouter({
+      classifier: options.locationClassifier,
     }),
   );
 

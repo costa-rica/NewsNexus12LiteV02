@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyLocationRatings,
   applyScrapeResults,
   flowReducer,
   resetFlow,
   setArticles,
+  setLocationRun,
   setScrapeRun,
   setStage,
 } from "./flowReducer";
@@ -149,5 +151,73 @@ describe("flowReducer", () => {
 
     expect(nextState.scrapeRun).toBeUndefined();
     expect(nextState.articles[0].scrape).toBeUndefined();
+  });
+
+  it("applyLocationRatings sets numbers for scored rows and null for skipped rows", () => {
+    const state: FlowState = {
+      currentStage: "location",
+      articles: [
+        {
+          id: "article-1",
+          title: "Scored",
+          source: "Example News",
+          description: "desc",
+          link: "https://example.com/1",
+        },
+        {
+          id: "article-2",
+          title: "Skipped",
+          source: "Example News",
+          description: "desc",
+          link: "https://example.com/2",
+        },
+        {
+          id: "article-3",
+          title: "Untouched",
+          source: "Example News",
+          description: "desc",
+          link: "https://example.com/3",
+        },
+      ],
+    };
+
+    const nextState = flowReducer(
+      state,
+      applyLocationRatings(
+        [{ article_id: "article-1", score: 0.92 }],
+        ["article-2"],
+      ),
+    );
+
+    expect(nextState.articles[0].locationRating).toBe(0.92);
+    expect(nextState.articles[1].locationRating).toBeNull();
+    expect(nextState.articles[2].locationRating).toBeUndefined();
+  });
+
+  it("setArticles clears location run status, and setLocationRun stores it", () => {
+    const withRun = flowReducer(
+      { currentStage: "location", articles: [] },
+      setLocationRun({
+        status: "completed",
+        processed: 1,
+        total: 1,
+        summary: { eligible: 1, processed: 1, skipped: 0, modelLoading: 0 },
+      }),
+    );
+    expect(withRun.locationRun?.status).toBe("completed");
+
+    const cleared = flowReducer(
+      withRun,
+      setArticles([
+        {
+          id: "article-1",
+          title: "Fresh",
+          source: "Example News",
+          description: "Fresh description",
+          link: "https://example.com/fresh",
+        },
+      ]),
+    );
+    expect(cleared.locationRun).toBeUndefined();
   });
 });
