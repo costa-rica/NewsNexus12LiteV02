@@ -13,13 +13,10 @@ export type GoogleRssErrorCode =
   | "request_failed"
   | "empty_query";
 
-export interface GoogleRssResponse {
-  success: boolean;
-  url?: string;
-  articlesArray?: Article[];
-  count?: number;
-  error?: string;
-  errorCode?: GoogleRssErrorCode;
+export interface GoogleRssSuccessResponse {
+  url: string;
+  articlesArray: Article[];
+  count: number;
 }
 
 export type ParsedRssArticle = Pick<

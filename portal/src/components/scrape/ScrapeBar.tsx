@@ -3,7 +3,7 @@
 import { FileSearch } from "lucide-react";
 import { useState } from "react";
 
-import { pollJob } from "@/lib/worker/jobClient";
+import { pollJob, WorkerRequestError } from "@/lib/worker/jobClient";
 import { startScrapeJob, type ScrapeJob } from "@/lib/worker/scrapeClient";
 import {
   applyScrapeResults,
@@ -73,10 +73,10 @@ export function ScrapeBar() {
       if (terminalJob.results?.length) {
         dispatch(applyScrapeResults(terminalJob.results));
       }
-    } catch {
+    } catch (error) {
       setStatus({
         type: "error",
-        message: "Scrape request failed. Please try again.",
+        message: getScrapeErrorMessage(error),
       });
       dispatch(
         setScrapeRun({
@@ -147,6 +147,14 @@ export function ScrapeBar() {
       </div>
     </section>
   );
+}
+
+function getScrapeErrorMessage(error: unknown) {
+  if (error instanceof WorkerRequestError) {
+    return error.message;
+  }
+
+  return "Scrape request failed. Please try again.";
 }
 
 function toScrapeRunStatus(job: ScrapeJob): ScrapeRunStatus {

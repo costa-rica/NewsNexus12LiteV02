@@ -18,6 +18,17 @@ export interface StartJobResponse {
   endpointName: string;
 }
 
+export class WorkerRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "WorkerRequestError";
+  }
+}
+
 interface PollJobOptions<TResults, TSummary> {
   intervalMs?: number;
   maxAttempts?: number;
@@ -83,13 +94,23 @@ export async function cancelJob<TResults = unknown, TSummary = Record<string, nu
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
-  const data = (await response.json()) as T;
+  const data = (await response.json().catch(() => ({}))) as
+    | T
+    | { error?: { code?: string; message?: string } };
 
   if (!response.ok) {
-    throw new Error("Worker request failed.");
+    const envelope = (data as { error?: { code?: string; message?: string } })
+      .error;
+    const code = typeof envelope?.code === "string" ? envelope.code : undefined;
+    const message =
+      typeof envelope?.message === "string"
+        ? envelope.message
+        : "Worker request failed.";
+
+    throw new WorkerRequestError(message, response.status, code);
   }
 
-  return data;
+  return data as T;
 }
 
 function wait(ms: number) {

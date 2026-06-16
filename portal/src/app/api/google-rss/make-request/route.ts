@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { errorJson } from "@/lib/http/errors";
 import { applyArticleLimit } from "@/lib/google-rss/limit";
 import { assignArticleIds } from "@/lib/google-rss/mapArticles";
 import { parseRssItems } from "@/lib/google-rss/parse";
@@ -7,8 +8,7 @@ import { buildGoogleRssQuery } from "@/lib/google-rss/queryBuilder";
 import { fetchGoogleRss } from "@/lib/google-rss/rssFetcher";
 import type {
   GoogleRssCriteria,
-  GoogleRssErrorCode,
-  GoogleRssResponse,
+  GoogleRssSuccessResponse,
 } from "@/lib/google-rss/types";
 import { buildGoogleRssUrl } from "@/lib/google-rss/url";
 
@@ -28,21 +28,6 @@ function normalizeCriteria(body: PartialCriteria): GoogleRssCriteria {
   };
 }
 
-function errorResponse(
-  errorCode: GoogleRssErrorCode,
-  error: string,
-  status: number,
-) {
-  return NextResponse.json(
-    {
-      success: false,
-      errorCode,
-      error,
-    } satisfies GoogleRssResponse,
-    { status },
-  );
-}
-
 export async function POST(request: Request) {
   let body: PartialCriteria = {};
 
@@ -55,7 +40,11 @@ export async function POST(request: Request) {
   const criteria = normalizeCriteria(body);
 
   if (!criteria.and_keywords.trim()) {
-    return errorResponse("empty_query", "Enter a search query.", 400);
+    return errorJson({
+      code: "VALIDATION_ERROR",
+      message: "Enter a search query.",
+      status: 400,
+    });
   }
 
   const query = buildGoogleRssQuery(criteria);
@@ -63,11 +52,21 @@ export async function POST(request: Request) {
   const fetchResult = await fetchGoogleRss(url);
 
   if (fetchResult.status === "error") {
-    return errorResponse(
-      fetchResult.errorCode,
-      fetchResult.error,
-      fetchResult.errorCode === "rate_limited" ? 503 : 500,
-    );
+    if (fetchResult.errorCode === "rate_limited") {
+      return errorJson({
+        code: "SERVICE_UNAVAILABLE",
+        message: "Google News RSS temporarily unavailable, retry later.",
+        status: 503,
+        details: fetchResult.error,
+      });
+    }
+
+    return errorJson({
+      code: "INTERNAL_ERROR",
+      message: "Request failed. Please try again.",
+      status: 500,
+      details: fetchResult.error,
+    });
   }
 
   try {
@@ -76,16 +75,16 @@ export async function POST(request: Request) {
     const articles = assignArticleIds(limitedItems);
 
     return NextResponse.json({
-      success: true,
       url,
       articlesArray: articles,
       count: articles.length,
-    } satisfies GoogleRssResponse);
-  } catch {
-    return errorResponse(
-      "request_failed",
-      "Failed to parse Google News RSS response.",
-      500,
-    );
+    } satisfies GoogleRssSuccessResponse);
+  } catch (error) {
+    return errorJson({
+      code: "INTERNAL_ERROR",
+      message: "Request failed. Please try again.",
+      status: 500,
+      details: error instanceof Error ? error.message : "parse_failed",
+    });
   }
 }

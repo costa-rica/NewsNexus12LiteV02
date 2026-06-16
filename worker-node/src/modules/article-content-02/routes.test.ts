@@ -55,6 +55,19 @@ describe("article-content-scraper-02 routes", () => {
     ]);
   });
 
+  it("rejects a request without an articles array using the error envelope", async () => {
+    const app = createApp();
+    const response = await request(app)
+      .post("/article-content-scraper-02/start-job")
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: { code: "VALIDATION_ERROR", status: 400 },
+    });
+    expect(typeof response.body.error.message).toBe("string");
+  });
+
   it("cancels a scrape job mid-run", async () => {
     const processor: ScrapeProcessor = async (article, signal) => {
       await wait(30);

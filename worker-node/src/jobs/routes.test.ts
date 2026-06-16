@@ -22,7 +22,10 @@ describe("job routes", () => {
     const response = await request(app).get("/jobs/missing-job");
 
     expect(response.status).toBe(404);
-    expect(response.body).toEqual({ error: "job_not_found" });
+    expect(response.body).toMatchObject({
+      error: { code: "NOT_FOUND", status: 404 },
+    });
+    expect(typeof response.body.error.message).toBe("string");
   });
 
   it("reports queued, running, and completed workflow states", async () => {

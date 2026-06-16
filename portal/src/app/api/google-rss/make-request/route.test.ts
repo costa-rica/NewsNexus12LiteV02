@@ -53,7 +53,6 @@ describe("POST /api/google-rss/make-request", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.success).toBe(true);
     expect(body.count).toBe(1);
     expect(body.url).toContain("https://news.google.com/rss/search");
     expect(body.articlesArray[0]).toMatchObject({
@@ -76,8 +75,7 @@ describe("POST /api/google-rss/make-request", () => {
 
     expect(response.status).toBe(400);
     expect(body).toMatchObject({
-      success: false,
-      errorCode: "empty_query",
+      error: { code: "VALIDATION_ERROR", status: 400 },
     });
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -89,7 +87,7 @@ describe("POST /api/google-rss/make-request", () => {
     const body = await response.json();
 
     expect(response.status).toBe(503);
-    expect(body.errorCode).toBe("rate_limited");
+    expect(body.error.code).toBe("SERVICE_UNAVAILABLE");
   });
 
   it("maps other non-OK responses to request_failed", async () => {
@@ -99,7 +97,7 @@ describe("POST /api/google-rss/make-request", () => {
     const body = await response.json();
 
     expect(response.status).toBe(500);
-    expect(body.errorCode).toBe("request_failed");
+    expect(body.error.code).toBe("INTERNAL_ERROR");
   });
 
   it("maps malformed XML to request_failed", async () => {
@@ -109,7 +107,7 @@ describe("POST /api/google-rss/make-request", () => {
     const body = await response.json();
 
     expect(response.status).toBe(500);
-    expect(body.errorCode).toBe("request_failed");
+    expect(body.error.code).toBe("INTERNAL_ERROR");
   });
 
   it("returns success with zero count for an empty feed", async () => {
@@ -120,7 +118,6 @@ describe("POST /api/google-rss/make-request", () => {
 
     expect(response.status).toBe(200);
     expect(body).toMatchObject({
-      success: true,
       count: 0,
       articlesArray: [],
     });

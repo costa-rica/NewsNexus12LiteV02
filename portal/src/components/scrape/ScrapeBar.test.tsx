@@ -4,14 +4,15 @@ import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { FlowIndicatorBar } from "@/components/layout/FlowIndicatorBar";
 import { ScrapeBar } from "@/components/scrape/ScrapeBar";
 import { ArticlesTable } from "@/components/tables/ArticlesTable";
-import { pollJob } from "@/lib/worker/jobClient";
+import { pollJob, WorkerRequestError } from "@/lib/worker/jobClient";
 import { startScrapeJob, type ScrapeJob } from "@/lib/worker/scrapeClient";
 import { FlowProvider } from "@/state/FlowContext";
 import type { FlowState } from "@/state/types";
 
-vi.mock("@/lib/worker/jobClient", () => ({
-  pollJob: vi.fn(),
-}));
+vi.mock("@/lib/worker/jobClient", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/worker/jobClient")>();
+  return { ...actual, pollJob: vi.fn() };
+});
 
 vi.mock("@/lib/worker/scrapeClient", () => ({
   startScrapeJob: vi.fn(),
@@ -135,5 +136,25 @@ describe("ScrapeBar", () => {
     });
 
     expect(screen.getByRole("button", { name: "Scrape" })).toBeDisabled();
+  });
+
+  it("shows a worker-specific error when worker-node is unavailable", async () => {
+    (startScrapeJob as unknown as Mock).mockRejectedValue(
+      new WorkerRequestError(
+        "Worker service unavailable. Start the worker and try again.",
+        503,
+        "SERVICE_UNAVAILABLE",
+      ),
+    );
+
+    renderScrapeHarness();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scrape" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Worker service unavailable. Start the worker and try again.",
+      );
+    });
   });
 });

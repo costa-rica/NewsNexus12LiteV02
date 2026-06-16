@@ -1,5 +1,6 @@
 import express from "express";
 
+import { errorMiddleware } from "./http/errors.js";
 import { jobRouter } from "./jobs/routes.js";
 import type { ScrapeProcessor } from "./modules/article-content-02/enrichment.js";
 import { createArticleContentScraperRouter } from "./modules/article-content-02/routes.js";
@@ -23,6 +24,8 @@ export function createApp(options: CreateAppOptions = {}) {
       processArticle: options.scrapeProcessor,
     }),
   );
+
+  app.use(errorMiddleware);
 
   return app;
 }

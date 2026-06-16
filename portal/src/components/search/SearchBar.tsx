@@ -14,24 +14,10 @@ type SearchStatus =
   | { type: "error"; message: string };
 
 interface GoogleRssClientResponse {
-  success: boolean;
   url?: string;
   articlesArray?: Article[];
   count?: number;
-  errorCode?: "rate_limited" | "request_failed" | "empty_query";
-  error?: string;
-}
-
-function getFailureMessage(errorCode: GoogleRssClientResponse["errorCode"]) {
-  if (errorCode === "rate_limited") {
-    return "Google News RSS temporarily unavailable, retry later.";
-  }
-
-  if (errorCode === "empty_query") {
-    return "Enter a search query.";
-  }
-
-  return "Request failed. Please try again.";
+  error?: { code: string; message: string; status: number };
 }
 
 export function SearchBar() {
@@ -78,10 +64,10 @@ export function SearchBar() {
       });
       const data = (await response.json()) as GoogleRssClientResponse;
 
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
         setStatus({
           type: "error",
-          message: getFailureMessage(data.errorCode),
+          message: data.error?.message ?? "Request failed. Please try again.",
         });
         return;
       }

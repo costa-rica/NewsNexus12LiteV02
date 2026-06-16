@@ -1,4 +1,5 @@
 import { type ArticleContentConfig, loadArticleContentConfig } from "./config.js";
+import { logInfo, logWarn } from "../../logger.js";
 import { classifyGooglePage } from "./googleClassifier.js";
 import { navigateGoogleRssUrl, type GoogleNavigationResult } from "./googleNavigator.js";
 import type { BrowserPageProvider } from "./navigationSessionManager.js";
@@ -62,6 +63,12 @@ export async function enrichArticle(
   const rssContent = normalizeText(article.content ?? "");
 
   if (rssContent.length >= config.contentMinLength) {
+    logInfo("article scrape succeeded", {
+      articleId: article.id,
+      bodySource: "rss-feed",
+      extractionSource: "none",
+    });
+
     return {
       articleId: article.id,
       googleRssUrl: url,
@@ -176,6 +183,14 @@ export async function enrichArticle(
     });
   }
 
+  logInfo("article scrape succeeded", {
+    articleId: article.id,
+    bodySource: publisherResult.bodySource,
+    extractionSource: extraction.extractionSource,
+    googleStatusCode: googleResult.statusCode,
+    publisherStatusCode: publisherResult.statusCode,
+  });
+
   return {
     articleId: article.id,
     googleRssUrl: url,
@@ -252,6 +267,16 @@ function createFailureResult(
   article: ScrapeArticleInput,
   result: Omit<ScrapeResult, "articleId" | "status">,
 ): ScrapeResult {
+  logWarn("article scrape failed", {
+    articleId: article.id,
+    failureType: result.failureType,
+    details: result.details,
+    bodySource: result.bodySource,
+    extractionSource: result.extractionSource,
+    googleStatusCode: result.googleStatusCode,
+    publisherStatusCode: result.publisherStatusCode,
+  });
+
   return {
     articleId: article.id,
     status: "fail",

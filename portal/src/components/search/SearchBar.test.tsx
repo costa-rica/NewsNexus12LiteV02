@@ -106,8 +106,11 @@ describe("SearchBar", () => {
   it("keeps the existing table and shows a rate-limit message", async () => {
     mockFetchResponse(
       {
-        success: false,
-        errorCode: "rate_limited",
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "Google News RSS temporarily unavailable, retry later.",
+          status: 503,
+        },
       },
       false,
       503,
@@ -130,8 +133,11 @@ describe("SearchBar", () => {
   it("keeps the existing table and shows a request-failed message", async () => {
     mockFetchResponse(
       {
-        success: false,
-        errorCode: "request_failed",
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Request failed. Please try again.",
+          status: 500,
+        },
       },
       false,
       500,

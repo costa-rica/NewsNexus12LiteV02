@@ -64,164 +64,164 @@ stage 4–6 feature work.
 
 ## Phase 0 — Preconditions & dependencies
 
-- [ ] Confirm `HEAD` includes the committed scrape worker and both apps are green
+- [x] Confirm `HEAD` includes the committed scrape worker and both apps are green
       (type/lint/test/build). Coordinate with any in-flight parallel edits per Context above.
-- [ ] worker-node: add deps `winston` + `winston-daily-rotate-file` (pin versions; note in
+- [x] worker-node: add deps `winston` + `winston-daily-rotate-file` (pin versions; note in
       commit body).
-- [ ] worker-node `.env.example`: add `NODE_ENV=development`,
+- [x] worker-node `.env.example`: add `NODE_ENV=development`,
       `NAME_APP=NewsNexusLiteWorker`, `PATH_TO_LOGS=/absolute/path/to/logs` (**absolute**
       placeholder), `LOG_MAX_SIZE=5`, `LOG_MAX_FILES=5` (keep `PORT` + scrape vars).
       Gitignore the log directory if it lives under the repo.
-- [ ] portal `.env.example`: document `LOG_LEVEL` (optional, default `info`).
+- [x] portal `.env.example`: document `LOG_LEVEL` (optional, default `info`).
 
 ### End-of-phase checks (Phase 0)
-- [ ] worker-node + portal: type-check · lint · test · build pass.
+- [x] worker-node + portal: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 1 — worker-node compliant Winston logger + startup validation
 
-- [ ] Rewrite the internals of `worker-node/src/logger.ts` to Winston +
+- [x] Rewrite the internals of `worker-node/src/logger.ts` to Winston +
       `winston-daily-rotate-file`, **keeping the `logInfo/logWarn/logError/logDebug` exports**.
       Mode by `NODE_ENV`: development=console, testing=console+files, production=files. Dated
       `{NAME_APP}-YYYY-MM-DD.log`; `maxSize` from `LOG_MAX_SIZE`, `maxFiles` from
       `LOG_MAX_FILES`. Singleton, initialized before other app code.
-- [ ] Startup env validation (in the logger module or a sibling, run before logger use):
+- [x] Startup env validation (in the logger module or a sibling, run before logger use):
       - required: `NODE_ENV`, `NAME_APP`, `PATH_TO_LOGS` — missing → fatal (stderr +
         `process.exit(1)`);
       - `NODE_ENV` must be one of `development|testing|production` (vitest's default `test`
         fails);
       - `PATH_TO_LOGS` must be **absolute** — reject relative (do not normalize);
       - apply the doc's flush-before-exit delay on fatal paths.
-- [ ] `worker-node/src/server.ts`: import order `dotenv` → logger/validation → `createApp()`;
+- [x] `worker-node/src/server.ts`: import order `dotenv` → logger/validation → `createApp()`;
       apply the early-exit flush pattern. Remove the `console.log` listen log in favor of the
       logger.
-- [ ] Vitest setup: worker tests run with **`NODE_ENV=testing`** (Vitest config/setup file or
+- [x] Vitest setup: worker tests run with **`NODE_ENV=testing`** (Vitest config/setup file or
       the `test` script) and set `NAME_APP` + an absolute `PATH_TO_LOGS` before importing
       app/routes, so import-time validation does not kill the test process.
-- [ ] Tests: **isolated child-process** fatal-exit cases — missing required var, invalid
+- [x] Tests: **isolated child-process** fatal-exit cases — missing required var, invalid
       `NODE_ENV` (`test`), and relative `PATH_TO_LOGS`. Confirm no `console.*` remains in
       committed worker server code (Winston handles transports).
 
 ### End-of-phase checks (Phase 1)
-- [ ] worker-node: type-check · lint · test · build pass.
+- [x] worker-node: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 2 — Shared error-envelope helpers
 
-- [ ] `worker-node/src/http/errors.ts`: envelope builder + Express error-handling middleware
+- [x] `worker-node/src/http/errors.ts`: envelope builder + Express error-handling middleware
       that logs the detail via the logger and returns the sanitized
       `{ error: { code, message, details?, status } }`; `details` only when
       `NODE_ENV === "development"`. Wire the middleware in `worker-node/src/app.ts` after the
       routes.
-- [ ] `portal/src/lib/http/errors.ts`: `errorJson({ code, message, status, details? })` →
+- [x] `portal/src/lib/http/errors.ts`: `errorJson({ code, message, status, details? })` →
       `NextResponse.json({ error: {...} }, { status })`; logs via `serverLogger`; `details`
       only in development. Export a shared `ApiErrorBody` type.
-- [ ] Tests: helper unit (envelope shape; `details` present in development, omitted otherwise).
+- [x] Tests: helper unit (envelope shape; `details` present in development, omitted otherwise).
 
 ### End-of-phase checks (Phase 2)
-- [ ] worker-node + portal: type-check · lint · test · build pass.
+- [x] worker-node + portal: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 3 — Retrofit worker-node endpoints
 
-- [ ] `worker-node/src/jobs/routes.ts`: `GET /jobs/:jobId` and `POST /jobs/:jobId/cancel`
+- [x] `worker-node/src/jobs/routes.ts`: `GET /jobs/:jobId` and `POST /jobs/:jobId/cancel`
       unknown id → `NOT_FOUND` 404 envelope (replace legacy `{ error: "job_not_found" }`);
       unexpected failures flow through the error middleware as `INTERNAL_ERROR` 500.
-- [ ] `worker-node/src/modules/article-content-02/routes.ts`: scrape `start-job` invalid body
+- [x] `worker-node/src/modules/article-content-02/routes.ts`: scrape `start-job` invalid body
       → `VALIDATION_ERROR` 400 envelope.
-- [ ] Replace any `console.*` in these routes/modules with the logger; log **metadata**
+- [x] Replace any `console.*` in these routes/modules with the logger; log **metadata**
       (ids, counts, status, failure type) — never bodies/content.
-- [ ] Update worker tests (`jobs/routes.test.ts`, `modules/article-content-02/routes.test.ts`,
+- [x] Update worker tests (`jobs/routes.test.ts`, `modules/article-content-02/routes.test.ts`,
       `app.test.ts`) to assert the envelope + status.
 
 ### End-of-phase checks (Phase 3)
-- [ ] worker-node: type-check · lint · test · build pass.
+- [x] worker-node: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 4 — Retrofit portal Search endpoint + consumer
 
-- [ ] `portal/src/app/api/google-rss/make-request/route.ts`: replace the `errorResponse()`
+- [x] `portal/src/app/api/google-rss/make-request/route.ts`: replace the `errorResponse()`
       `{ success, errorCode, error }` branches with `errorJson` envelopes — empty query →
       `VALIDATION_ERROR` 400; Google 503 → `SERVICE_UNAVAILABLE` 503; parse/other →
       `INTERNAL_ERROR` 500. **Success payload unchanged** (`{ url, articlesArray, count }`).
       Log failures via `serverLogger` (metadata only).
-- [ ] `portal/src/lib/google-rss/types.ts`: drop the error fields from the success type; use
+- [x] `portal/src/lib/google-rss/types.ts`: drop the error fields from the success type; use
       the shared `ApiErrorBody` for error responses.
-- [ ] `portal/src/components/search/SearchBar.tsx`: failure handling reads non-2xx +
+- [x] `portal/src/components/search/SearchBar.tsx`: failure handling reads non-2xx +
       `data.error.message` (remove/reduce `getFailureMessage`).
-- [ ] Update `route.test.ts` and `SearchBar.test.tsx` for the envelope + message rendering.
+- [x] Update `route.test.ts` and `SearchBar.test.tsx` for the envelope + message rendering.
 
 ### End-of-phase checks (Phase 4)
-- [ ] portal: type-check · lint · test · build pass.
+- [x] portal: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 5 — Retrofit portal proxy + scrape consumers
 
-- [ ] `portal/src/lib/worker/serverProxy.ts`: **remove the `body.slice(0, 500)` log**; on a
+- [x] `portal/src/lib/worker/serverProxy.ts`: **remove the `body.slice(0, 500)` log**; on a
       failed worker response log metadata only (method, path, upstream status, error `code`,
       failure type) via `serverLogger`. Worker unreachable → `SERVICE_UNAVAILABLE` 503
       envelope (replace `{ error: "worker_unavailable" }`).
-- [ ] Portal worker route handlers (`app/api/worker/article-content-scraper-02/start-job`,
+- [x] Portal worker route handlers (`app/api/worker/article-content-scraper-02/start-job`,
       `app/api/worker/jobs/[jobId]`, `app/api/worker/jobs/[jobId]/cancel`): ensure error paths
       return the envelope (via the proxy/`errorJson`).
-- [ ] `portal/src/lib/worker/jobClient.ts` + `scrapeClient.ts`: read the `data.error` envelope
+- [x] `portal/src/lib/worker/jobClient.ts` + `scrapeClient.ts`: read the `data.error` envelope
       on failure (not the legacy string shape).
-- [ ] `portal/src/components/scrape/ScrapeBar.tsx`: failure handling reads
+- [x] `portal/src/components/scrape/ScrapeBar.tsx`: failure handling reads
       `data.error.message`.
-- [ ] Update tests: `serverProxy`, `jobClient.test.ts`, the three worker-route `route.test.ts`
+- [x] Update tests: `serverProxy`, `jobClient.test.ts`, the three worker-route `route.test.ts`
       files, and `ScrapeBar.test.tsx`.
 
 ### End-of-phase checks (Phase 5)
-- [ ] portal: type-check · lint · test · build pass.
+- [x] portal: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 6 — Reconcile loggers & console sweep
 
-- [ ] Update `portal/src/lib/serverLogger.ts` to write structured lines via
+- [x] Update `portal/src/lib/serverLogger.ts` to write structured lines via
       `process.stdout.write` / `process.stderr.write` (append newline), **not `console.*`**,
       preserving its `logDebug/logInfo/logWarn/logError` API and `LOG_LEVEL` behavior. It
       remains the portal standard, imported only by server-side code (route handlers / server
       actions), never client components.
-- [ ] Sweep both apps: **no `console.*` anywhere in committed server code, with no
+- [x] Sweep both apps: **no `console.*` anywhere in committed server code, with no
       exceptions** — the worker logs via Winston transports, the portal logs via the
       `process.stdout/stderr.write`-based `serverLogger`. Replace any remaining occurrences.
       Client UI components must not log in committed code.
 
 ### End-of-phase checks (Phase 6)
-- [ ] worker-node + portal: type-check · lint · test · build pass.
+- [x] worker-node + portal: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 7 — Verification (manual + automated)
 
-- [ ] worker-node: missing required env, invalid `NODE_ENV`, and relative `PATH_TO_LOGS` each
+- [x] worker-node: missing required env, invalid `NODE_ENV`, and relative `PATH_TO_LOGS` each
       fatal-exit with a clear stderr message; in testing/production modes a dated
       `{NAME_APP}-YYYY-MM-DD.log` is written under the absolute `PATH_TO_LOGS`.
-- [ ] Representative error responses across **all** endpoints (Search, worker job routes,
+- [x] Representative error responses across **all** endpoints (Search, worker job routes,
       scrape `start-job`, portal proxy routes) return the standard envelope; `details` only in
       development; no body/secret logging anywhere.
-- [ ] `SearchBar` and `ScrapeBar` render the server error message on failure.
-- [ ] A literal `console.` grep over committed server code in both apps returns nothing.
-- [ ] Mark **Scrape TODO Phase 9 closed** by this cycle.
+- [x] `SearchBar` and `ScrapeBar` render the server error message on failure.
+- [x] A literal `console.` grep over committed server code in both apps returns nothing.
+- [x] Mark **Scrape TODO Phase 9 closed** by this cycle.
 
 ### End-of-phase checks (Phase 7)
-- [ ] worker-node + portal: type-check · lint · test · build pass.
+- [x] worker-node + portal: type-check · lint · test · build pass.
 
 ---
 
 ## Phase 8 — Commit (only after all checks pass)
 
-- [ ] All phases complete; all end-of-phase checks green in both apps; every checkbox above
+- [x] All phases complete; all end-of-phase checks green in both apps; every checkbox above
       checked off.
-- [ ] Stage and commit per `AGENTS.md` (broad commit — shared logging/error infra + retrofit
+- [x] Stage and commit per `AGENTS.md` (broad commit — shared logging/error infra + retrofit
       across both apps): lowercase title ≤ 50 chars, body explaining *why* + main areas,
       reference this TODO file and its phases, append
       `co-authored-by: <agent name> (<model>)`.
-- [ ] Do **not** push. After this cycle, resume **stage 4 (Location)** per
+- [x] Do **not** push. After this cycle, resume **stage 4 (Location)** per
       `docs/20260615_build_sequence.md`.

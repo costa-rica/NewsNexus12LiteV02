@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { cancelJob, pollJob, startJob } from "./jobClient";
+import {
+  cancelJob,
+  pollJob,
+  startJob,
+  WorkerRequestError,
+} from "./jobClient";
 
 function mockJsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -38,6 +43,28 @@ describe("worker job client", () => {
       }),
     );
     expect(String(fetch.mock.calls[0]?.[0])).not.toContain("8081");
+  });
+
+  it("surfaces the worker error envelope code and message", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      mockJsonResponse(
+        {
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Worker service unavailable. Start the worker and try again.",
+            status: 503,
+          },
+        },
+        { status: 503 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(startJob("article-content-scraper-02", { articles: [] })).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+      status: 503,
+      message: "Worker service unavailable. Start the worker and try again.",
+    } satisfies Partial<WorkerRequestError>);
   });
 
   it("polls until a terminal completed status and emits updates", async () => {

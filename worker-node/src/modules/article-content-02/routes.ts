@@ -1,7 +1,9 @@
 import { Router } from "express";
 
+import { sendError } from "../../http/errors.js";
 import { createJob } from "../../jobs/registry.js";
 import { runJob } from "../../jobs/runner.js";
+import { logInfo } from "../../logger.js";
 import { loadArticleContentConfig } from "./config.js";
 import {
   createArticleContentProcessor,
@@ -33,20 +35,36 @@ export function createArticleContentScraperRouter(
     const body = request.body as StartScrapeJobBody;
 
     if (!Array.isArray(body.articles)) {
-      response.status(400).json({ error: "invalid_articles" });
+      sendError(response, {
+        code: "VALIDATION_ERROR",
+        message: "Request must include an articles array",
+        status: 400,
+        logMeta: { reason: "invalid_articles" },
+      });
       return;
     }
 
     const articles = body.articles.filter(isScrapeArticleInput);
 
     if (articles.length !== body.articles.length) {
-      response.status(400).json({ error: "invalid_articles" });
+      sendError(response, {
+        code: "VALIDATION_ERROR",
+        message: "Each article must include a non-empty string id",
+        status: 400,
+        logMeta: { reason: "invalid_article_shape" },
+      });
       return;
     }
 
     const job = createJob<ScrapeResult[]>(ENDPOINT_NAME, articles.length, {
       endpointName: ENDPOINT_NAME,
       summary: createEmptyScrapeSummary(),
+    });
+
+    logInfo("scrape job accepted", {
+      jobId: job.jobId,
+      total: articles.length,
+      endpointName: ENDPOINT_NAME,
     });
 
     response.status(202).json({
