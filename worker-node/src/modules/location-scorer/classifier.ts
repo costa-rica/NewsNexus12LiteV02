@@ -28,6 +28,7 @@ export function createUsLocationClassifier(
       classifier = (await pipeline(
         "zero-shot-classification",
         config.model,
+        { dtype: config.dtype },
       )) as unknown as ZeroShotPipeline;
     }
     return classifier;
