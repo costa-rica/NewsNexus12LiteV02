@@ -6,6 +6,58 @@ This file provides guidance to agent / engineers when working with code in this 
 
 When running Python, use the venv in the project. Do not use the system environment. Before running Python commands, verify the active interpreter with `which python` and `python --version`.
 
+## Logging
+
+Project-wide logging convention. Two runtimes, two approaches:
+
+- **worker-node (standard Node app):** follow `docs/LOGGING_NODE_JS_V08.md` (authoritative) —
+  Winston + `winston-daily-rotate-file`, a singleton logger initialized before any other
+  application code, startup validation of required env vars (`NODE_ENV`, `NAME_APP`,
+  `PATH_TO_LOGS`), and the dated `{NAME_APP}-YYYY-MM-DD.log` file naming.
+- **portal (Next.js app):** `LOGGING_NODE_JS_V08.md` explicitly does **not** apply to
+  Next.js. Portal server-side code (route handlers, server actions) uses the shared server
+  logger at `portal/src/lib/serverLogger.ts` — level-based, structured, writing to
+  stdout/stderr. The portal does **not** use the Winston daily-rotate file transport.
+
+General rules (both apps):
+
+- Do **not** use `console.*` in committed server code — call the logger instead. (The
+  console→logger migration described in the logging doc is a human task; agents write
+  logger calls directly.)
+- Browser/client components should not log in committed code beyond intentional, guarded
+  dev diagnostics.
+- **Never log secrets** (API keys, tokens, credentials) or full request/response bodies.
+  This is an ephemeral demo — log identifiers, counts, statuses, and failure types rather
+  than full scraped article content or query payloads.
+- Use the app's logger for the server-side detail behind any error response (see Error
+  Handling).
+
+## Error Handling
+
+All HTTP/API endpoints return a consistent error envelope, per `docs/ERROR_REQUIREMENTS.md`
+(authoritative). This covers **both** worker-node Express routes **and** portal Next.js
+route handlers.
+
+- Error response body shape:
+
+  ```json
+  { "error": { "code": "UPPER_SNAKE_CODE", "message": "User-facing message", "details": "optional", "status": 500 } }
+  ```
+
+- `code` is an UPPER_SNAKE machine-readable identifier; `message` is concise and
+  user-facing; `status` matches the HTTP status header.
+- `details` is included only in development (`NODE_ENV === "development"`). **Never** expose
+  stack traces, DB errors, file paths, internal details, or credentials in production
+  responses.
+- Prefer the common codes from the doc (`VALIDATION_ERROR` 400, `NOT_FOUND` 404,
+  `RATE_LIMIT_EXCEEDED` 429, `INTERNAL_ERROR` 500, `SERVICE_UNAVAILABLE` 503, …).
+- Log the detailed error server-side via the logger; return only the sanitized envelope to
+  clients.
+- Each app should expose a **shared error helper** so routes build the envelope consistently
+  rather than hand-rolling it per endpoint.
+- Endpoints written before this standard (e.g. the Search route's `{ success, errorCode }`
+  shape) are to be migrated to this envelope as part of the dedicated logging/errors cycle.
+
 ## Creating Markdown Files in docs/
 
 ### Filenames

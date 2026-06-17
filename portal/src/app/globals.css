@@ -1,0 +1,151 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #ecf3ff;
+  --color-brand-100: #dde9ff;
+  --color-brand-200: #c2d6ff;
+  --color-brand-300: #9cb9ff;
+  --color-brand-400: #7592ff;
+  --color-brand-500: #465fff;
+  --color-brand-600: #3641f5;
+  --color-brand-700: #2a31d8;
+  --color-brand-800: #252dae;
+  --color-brand-900: #262e89;
+  --color-brand-950: #161950;
+
+  --color-gray-25: #fcfcfd;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
+
+  --shadow-theme-sm: 0 1px 3px 0 rgb(16 24 40 / 0.1),
+    0 1px 2px 0 rgb(16 24 40 / 0.06);
+  --shadow-theme-md: 0 4px 8px -2px rgb(16 24 40 / 0.1),
+    0 2px 4px -2px rgb(16 24 40 / 0.06);
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  html {
+    min-height: 100%;
+  }
+
+  body {
+    min-height: 100%;
+    margin: 0;
+    background: var(--color-gray-50);
+    color: var(--color-gray-900);
+    font-family: var(--font-sans);
+  }
+
+  .dark body {
+    background: var(--color-gray-950);
+    color: white;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+.slide-stage-shell {
+  --stage-index: 0;
+  min-height: 100vh;
+  padding: clamp(0.75rem, 2vw, 1.25rem);
+  background-color: #030712;
+  background-image: linear-gradient(
+    90deg,
+    #030712 0%,
+    #030712 32%,
+    #111827 43%,
+    #020617 54%,
+    #030712 72%,
+    #030712 100%
+  );
+  background-position: calc(var(--stage-index) * -16rem) 0;
+  background-size: 180% 100%;
+  transition: background-position 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide-stage {
+  position: relative;
+  min-height: calc(100vh - clamp(1.5rem, 4vw, 2.5rem));
+  padding: 4px;
+  border-radius: 8px;
+  background-color: #030712;
+  background-image: linear-gradient(
+    90deg,
+    #020617 0%,
+    #020617 34%,
+    #334155 44%,
+    #020617 54%,
+    #020617 100%
+  );
+  background-position: calc(var(--stage-index) * -18rem) 0;
+  background-size: 180% 100%;
+  box-shadow: 0 22px 60px rgb(0 0 0 / 0.35);
+  isolation: isolate;
+  transition: background-position 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide-stage__viewport {
+  min-height: calc(100vh - clamp(1.5rem, 4vw, 2.5rem) - 8px);
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: var(--stage-tint-light);
+  transition: background-color 1400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark .slide-stage__viewport {
+  background-color: var(--stage-tint-dark);
+}
+
+.slide-stage__content {
+  position: relative;
+  z-index: 1;
+  min-height: inherit;
+  transform: translateX(calc(var(--stage-index) * 12px));
+  transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.articles-table-region {
+  width: 100%;
+  padding-inline: calc(2rem - clamp(0.75rem, 2vw, 1.25rem) - 4px);
+  padding-bottom: 2.5rem;
+}
+
+@media (min-width: 1024px) {
+  .articles-table-region {
+    padding-inline: calc(5rem - clamp(0.75rem, 2vw, 1.25rem) - 4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-stage-shell,
+  .slide-stage,
+  .slide-stage__viewport,
+  .slide-stage__content {
+    transition: none;
+  }
+}
