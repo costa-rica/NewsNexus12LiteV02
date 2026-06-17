@@ -3,6 +3,7 @@
 import { FileSearch } from "lucide-react";
 import { useState } from "react";
 
+import { LoadingDots } from "@/components/common/LoadingDots";
 import { pollJob, WorkerRequestError } from "@/lib/worker/jobClient";
 import { startScrapeJob, type ScrapeJob } from "@/lib/worker/scrapeClient";
 import {
@@ -145,7 +146,45 @@ export function ScrapeBar() {
           </div>
         )}
       </div>
+
+      {isRunning && run && <ScrapeProgressDialog run={run} />}
     </section>
+  );
+}
+
+function ScrapeProgressDialog({ run }: { run: ScrapeRunStatus }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/70 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Scraping articles"
+        aria-live="polite"
+        className="w-full max-w-sm rounded-lg border border-gray-200 bg-white px-6 py-7 text-center shadow-theme-md dark:border-gray-800 dark:bg-gray-950"
+      >
+        <LoadingDots className="mb-6" size={3} />
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          Scraping articles
+        </h2>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+          {run.processed}/{run.total} processed
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-2 text-left text-sm text-gray-700 dark:text-gray-200">
+          <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
+            Success {run.summary.success}
+          </span>
+          <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
+            Failed {run.summary.failed}
+          </span>
+          <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
+            Skipped {run.summary.skipped}
+          </span>
+          <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
+            Total {run.summary.considered}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 

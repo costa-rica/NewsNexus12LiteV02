@@ -31,7 +31,7 @@ export function ArticlesTable({ articles }: ArticlesTableProps) {
   return (
     <section
       data-testid="articles-table-region"
-      className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 lg:px-8"
+      className="articles-table-region"
       aria-label="Article table"
     >
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white/80 shadow-theme-md backdrop-blur dark:border-white/10 dark:bg-gray-950/55">

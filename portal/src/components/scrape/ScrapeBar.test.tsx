@@ -55,6 +55,69 @@ describe("ScrapeBar", () => {
     vi.clearAllMocks();
   });
 
+  it("shows a progress dialog while scraping is running", async () => {
+    const runningJob: ScrapeJob = {
+      jobId: "job-1",
+      workflow: "article-content-scraper-02",
+      endpointName: "article-content-scraper-02",
+      status: "running",
+      processed: 1,
+      total: 2,
+      summary: {
+        considered: 1,
+        skipped: 0,
+        success: 1,
+        failed: 0,
+      },
+      results: [],
+    };
+    const completedJob: ScrapeJob = {
+      ...runningJob,
+      status: "completed",
+      processed: 2,
+      summary: {
+        considered: 2,
+        skipped: 0,
+        success: 1,
+        failed: 1,
+      },
+      results: [],
+    };
+    let finishPolling: (job: ScrapeJob) => void = () => undefined;
+
+    (startScrapeJob as unknown as Mock).mockResolvedValue({
+      jobId: "job-1",
+      status: "queued",
+      endpointName: "article-content-scraper-02",
+    });
+    (pollJob as unknown as Mock).mockImplementation(
+      async (_jobId: string, options?: { onUpdate?: (job: ScrapeJob) => void }) => {
+        options?.onUpdate?.(runningJob);
+
+        return new Promise<ScrapeJob>((resolve) => {
+          finishPolling = resolve;
+        });
+      },
+    );
+
+    renderScrapeHarness();
+    fireEvent.click(screen.getByRole("button", { name: "Scrape" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Scraping articles",
+    });
+    expect(dialog).toHaveTextContent("1/2 processed");
+    expect(dialog).toHaveTextContent("Success 1");
+
+    finishPolling(completedJob);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Scraping articles" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("runs the scrape job, merges results, and enables Next after completion", async () => {
     const completedJob: ScrapeJob = {
       jobId: "job-1",
