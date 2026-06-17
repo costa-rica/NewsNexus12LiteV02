@@ -11,6 +11,7 @@ import type {
   GoogleRssSuccessResponse,
 } from "@/lib/google-rss/types";
 import { buildGoogleRssUrl } from "@/lib/google-rss/url";
+import { logInfo } from "@/lib/serverLogger";
 
 type PartialCriteria = Partial<Record<keyof GoogleRssCriteria, unknown>>;
 
@@ -25,6 +26,17 @@ function normalizeCriteria(body: PartialCriteria): GoogleRssCriteria {
     or_keywords: readString(body.or_keywords),
     or_exact_phrases: readString(body.or_exact_phrases),
     time_range: readString(body.time_range) || "7d",
+  };
+}
+
+function summarizeCriteria(criteria: GoogleRssCriteria) {
+  return {
+    route: "google-rss.make-request",
+    andKeywordsLength: criteria.and_keywords.trim().length,
+    hasExactPhrases: criteria.and_exact_phrases.trim().length > 0,
+    hasOrKeywords: criteria.or_keywords.trim().length > 0,
+    hasOrExactPhrases: criteria.or_exact_phrases.trim().length > 0,
+    timeRange: criteria.time_range,
   };
 }
 
@@ -44,11 +56,14 @@ export async function POST(request: Request) {
       code: "VALIDATION_ERROR",
       message: "Enter a search query.",
       status: 400,
+      logMeta: { route: "google-rss.make-request", failure: "empty_query" },
     });
   }
 
   const query = buildGoogleRssQuery(criteria);
   const url = buildGoogleRssUrl(query);
+  logInfo("google rss search requested", summarizeCriteria(criteria));
+
   const fetchResult = await fetchGoogleRss(url);
 
   if (fetchResult.status === "error") {
@@ -58,6 +73,10 @@ export async function POST(request: Request) {
         message: "Google News RSS temporarily unavailable, retry later.",
         status: 503,
         details: fetchResult.error,
+        logMeta: {
+          route: "google-rss.make-request",
+          failure: fetchResult.errorCode,
+        },
       });
     }
 
@@ -66,6 +85,10 @@ export async function POST(request: Request) {
       message: "Request failed. Please try again.",
       status: 500,
       details: fetchResult.error,
+      logMeta: {
+        route: "google-rss.make-request",
+        failure: fetchResult.errorCode,
+      },
     });
   }
 
@@ -73,6 +96,11 @@ export async function POST(request: Request) {
     const parsedItems = await parseRssItems(fetchResult.xml);
     const limitedItems = applyArticleLimit(parsedItems);
     const articles = assignArticleIds(limitedItems);
+    logInfo("google rss search completed", {
+      route: "google-rss.make-request",
+      parsedCount: parsedItems.length,
+      count: articles.length,
+    });
 
     return NextResponse.json({
       url,
@@ -85,6 +113,7 @@ export async function POST(request: Request) {
       message: "Request failed. Please try again.",
       status: 500,
       details: error instanceof Error ? error.message : "parse_failed",
+      logMeta: { route: "google-rss.make-request", failure: "parse_failed" },
     });
   }
 }
