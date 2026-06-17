@@ -2,7 +2,7 @@
 created_at: 2026-06-17
 updated_at: 2026-06-17
 created_by: claude (opus-4.8)
-modified_by: claude (opus-4.8)
+modified_by: hermes (gpt-5.5)
 ---
 
 # Tentative Plan: Location Rating Polling Fix (with Verification Requests)
@@ -96,12 +96,21 @@ implementation. These answers directly change the design and scope.
 
 ## Open decisions (pending the answers above)
 
-- Worker **thread** vs separate **child process** — leaning thread for shared
-  tooling and lower overhead, but a child process is more robust if the native
-  ONNX binding has thread-safety constraints. Server answers #1 and #3 decide
-  this.
-- Whether to bundle **Solution A** (`PATH_PROJECT_RESOURCES` pre-staging) into
-  this cycle or defer it — decided by answer #2.
+### Question 1: Worker thread vs separate child process
+
+Should the implementation use a worker **thread** or a separate **child process** for Hugging Face classification?
+
+#### Hermes Response
+
+Use a **worker thread** for the first implementation. The server has `onnxruntime-node` installed through `@huggingface/transformers`, the Transformers.js environment reports the native node ONNX version as available, and the host has 2 vCPUs with about 4.8 GiB available RAM at the time of review. A thread gives the API event loop isolation with lower overhead than a child process. Keep the worker boundary narrow enough that switching to a child process remains possible if native ONNX behavior proves unstable under thread isolation.
+
+### Question 2: Bundle Solution A now or defer it
+
+Should this cycle also include **Solution A** (`PATH_PROJECT_RESOURCES` pre-staging), or should that be deferred?
+
+#### Hermes Response
+
+Defer **Solution A** for now. The model cache is already present at `worker-node/node_modules/@huggingface/transformers/.cache/Xenova/bart-large-mnli` and is about 395 MiB, so it should survive ordinary service restarts. Because the cache lives under `node_modules`, it could still be wiped by a redeploy that rebuilds dependencies, but that is a deployment-hardening concern rather than the root cause of the polling failure. Implement thread isolation plus warm-up first; add pre-staging only if redeploys are confirmed to clear the cache.
 
 ## Next step
 
