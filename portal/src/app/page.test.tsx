@@ -20,9 +20,20 @@ describe("HomePage composition", () => {
     const slideStage = screen.getByTestId("slide-stage");
     const withinStage = within(slideStage);
 
-    expect(withinStage.getByTestId("top-bar")).toBeInTheDocument();
-    expect(withinStage.getByTestId("flow-indicator")).toBeInTheDocument();
-    expect(withinStage.getByTestId("articles-table-region")).toBeInTheDocument();
+    const topBar = withinStage.getByTestId("top-bar");
+    const flowIndicator = withinStage.getByTestId("flow-indicator");
+    const searchRegion = withinStage.getByRole("region", {
+      name: /google rss search/i,
+    });
+    const articlesTableRegion = withinStage.getByTestId("articles-table-region");
+
+    expect(topBar).toBeInTheDocument();
+    expect(flowIndicator).toBeInTheDocument();
+    expect(articlesTableRegion).toBeInTheDocument();
+    expect(topBar).toHaveClass("stage-aligned-region");
+    expect(flowIndicator).toHaveClass("stage-aligned-region");
+    expect(searchRegion).toHaveClass("stage-aligned-region");
+    expect(articlesTableRegion).toHaveClass("stage-aligned-region");
     expect(slideStage).toHaveAttribute("data-current-stage", "search");
     expect(
       withinStage.getByRole("button", { name: /next/i }),

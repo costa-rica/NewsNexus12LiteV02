@@ -6,7 +6,7 @@ export function TopBar() {
   return (
     <header
       data-testid="top-bar"
-      className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8"
+      className="stage-aligned-region flex items-center justify-between gap-4 py-4"
     >
       <div className="flex min-w-0 items-center gap-3">
         <Image

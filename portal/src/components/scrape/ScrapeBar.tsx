@@ -92,7 +92,7 @@ export function ScrapeBar() {
 
   return (
     <section
-      className="mx-auto w-full max-w-7xl px-4 pb-4 sm:px-6 lg:px-8"
+      className="stage-aligned-region pb-4"
       aria-label="Article scrape"
     >
       <div className="rounded-lg border border-gray-200/80 bg-white/75 p-4 shadow-theme-sm backdrop-blur dark:border-white/10 dark:bg-gray-950/45">
