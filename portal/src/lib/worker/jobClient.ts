@@ -36,6 +36,7 @@ interface PollJobOptions<TResults, TSummary> {
 }
 
 const TERMINAL_STATUSES = new Set<WorkerJobStatus>(["completed", "failed", "cancelled"]);
+const POLL_TRANSIENT_RETRIES = 2;
 
 export async function startJob<TPayload>(
   endpoint: string,
@@ -68,9 +69,13 @@ export async function pollJob<TResults = unknown, TSummary = Record<string, numb
 ): Promise<WorkerJob<TResults, TSummary>> {
   const intervalMs = options.intervalMs ?? 1_000;
   const maxAttempts = options.maxAttempts ?? 120;
+  const transientRetryDelayMs = Math.min(250, Math.max(0, Math.floor(intervalMs / 4)));
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const job = await getJob<TResults, TSummary>(jobId);
+    const job = await getJobWithTransientRetry<TResults, TSummary>(
+      jobId,
+      transientRetryDelayMs,
+    );
     options.onUpdate?.(job);
 
     if (TERMINAL_STATUSES.has(job.status)) {
@@ -117,4 +122,31 @@ function wait(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function getJobWithTransientRetry<
+  TResults = unknown,
+  TSummary = Record<string, number>,
+>(
+  jobId: string,
+  retryDelayMs: number,
+): Promise<WorkerJob<TResults, TSummary>> {
+  for (let retry = 0; ; retry += 1) {
+    try {
+      return await getJob<TResults, TSummary>(jobId);
+    } catch (error) {
+      if (!isTransientPollError(error) || retry >= POLL_TRANSIENT_RETRIES) {
+        throw error;
+      }
+      await wait(retryDelayMs);
+    }
+  }
+}
+
+function isTransientPollError(error: unknown): boolean {
+  if (error instanceof WorkerRequestError) {
+    return error.status === 502 || error.status === 504;
+  }
+
+  return true;
 }

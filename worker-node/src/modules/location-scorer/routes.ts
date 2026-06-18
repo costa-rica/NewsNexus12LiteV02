@@ -3,9 +3,9 @@ import { Router } from "express";
 import { sendError } from "../../http/errors.js";
 import { createJob } from "../../jobs/registry.js";
 import { logInfo } from "../../logger.js";
-import { createUsLocationClassifier } from "./classifier.js";
 import { loadLocationScorerConfig } from "./config.js";
 import { runLocationJob } from "./processor.js";
+import { createThreadLocationClassifier } from "./threadClassifier.js";
 import {
   createEmptyLocationSummary,
   type LocationArticleInput,
@@ -28,7 +28,7 @@ export function createLocationScorerRouter(
 ) {
   const router = Router();
   const config = loadLocationScorerConfig();
-  const classifier = options.classifier ?? createUsLocationClassifier(config);
+  const classifier = options.classifier ?? createThreadLocationClassifier(config);
 
   router.post(`/${ENDPOINT_NAME}/start-job`, (request, response) => {
     const body = request.body as StartLocationJobBody;
