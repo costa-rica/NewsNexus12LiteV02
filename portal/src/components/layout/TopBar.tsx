@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { DemoInfoModal } from "./DemoInfoModal";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function TopBar() {
@@ -23,7 +24,10 @@ export function TopBar() {
           </p>
         </div>
       </div>
-      <ThemeToggle />
+      <div className="flex shrink-0 items-center gap-2">
+        <DemoInfoModal />
+        <ThemeToggle />
+      </div>
     </header>
   );
 }
