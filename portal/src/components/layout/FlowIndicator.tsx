@@ -26,7 +26,7 @@ export function FlowIndicator({ canAdvance = false }: FlowIndicatorProps) {
   return (
     <section
       data-testid="flow-indicator"
-      className="mx-auto w-full max-w-7xl px-4 pb-4 sm:px-6 lg:px-8"
+      className="stage-aligned-region pb-4"
       aria-label="Pipeline progress"
     >
       <div className="flex flex-col gap-4 rounded-lg border border-gray-200/80 bg-white/70 px-4 py-4 shadow-theme-sm backdrop-blur dark:border-white/10 dark:bg-gray-950/45 sm:flex-row sm:items-center sm:justify-between">

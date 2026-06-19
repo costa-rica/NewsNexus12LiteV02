@@ -97,7 +97,7 @@ export function SearchBar() {
 
   return (
     <section
-      className="mx-auto w-full max-w-7xl px-4 pb-4 sm:px-6 lg:px-8"
+      className="stage-aligned-region pb-4"
       aria-label="Google RSS search"
     >
       <form

@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyStateAssignments,
   applyLocationRatings,
   applyScrapeResults,
+  clearStatePromptDraft,
   flowReducer,
   resetFlow,
   setArticles,
   setLocationRun,
   setScrapeRun,
+  setStatePromptDraft,
+  setStateRun,
   setStage,
 } from "./flowReducer";
 import type { FlowState } from "./types";
@@ -219,5 +223,170 @@ describe("flowReducer", () => {
       ]),
     );
     expect(cleared.locationRun).toBeUndefined();
+  });
+
+  it("setStateRun stores state run status and prompt draft can be cleared", () => {
+    const withRun = flowReducer(
+      { currentStage: "state", articles: [] },
+      setStateRun({
+        status: "completed",
+        processed: 1,
+        total: 1,
+        summary: {
+          eligible: 1,
+          processed: 1,
+          assigned: 1,
+          noState: 0,
+          failed: 0,
+          skipped: 0,
+          alreadyAssigned: 0,
+        },
+        promptUsed: "prompt",
+      }),
+    );
+    const withDraft = flowReducer(withRun, setStatePromptDraft("edited prompt"));
+    const clearedDraft = flowReducer(withDraft, clearStatePromptDraft());
+
+    expect(withRun.stateRun?.status).toBe("completed");
+    expect(withDraft.statePromptDraft).toBe("edited prompt");
+    expect(clearedDraft.statePromptDraft).toBeUndefined();
+  });
+
+  it("applyStateAssignments merges by article id and ignores unknown ids", () => {
+    const state: FlowState = {
+      currentStage: "state",
+      articles: [
+        {
+          id: "article-1",
+          title: "First",
+          source: "Example News",
+          description: "desc",
+          link: "https://example.com/1",
+        },
+        {
+          id: "article-2",
+          title: "Second",
+          source: "Example News",
+          description: "desc",
+          link: "https://example.com/2",
+        },
+        {
+          id: "article-3",
+          title: "Untouched",
+          source: "Example News",
+          description: "desc",
+          link: "https://example.com/3",
+        },
+      ],
+    };
+
+    const nextState = flowReducer(
+      state,
+      applyStateAssignments([
+        {
+          articleId: "article-2",
+          assignment: {
+            occuredInTheUS: false,
+            reasoning: "No U.S. location.",
+            stateName: "",
+            resultStatus: "no_state",
+          },
+        },
+        {
+          articleId: "missing",
+          assignment: {
+            resultStatus: "assigned",
+            stateName: "California",
+          },
+        },
+        {
+          articleId: "article-1",
+          assignment: {
+            occuredInTheUS: true,
+            reasoning: "Los Angeles is in California.",
+            stateName: "California",
+            resultStatus: "assigned",
+          },
+        },
+      ]),
+    );
+
+    expect(nextState.articles[0].stateAssignment).toMatchObject({
+      resultStatus: "assigned",
+      stateName: "California",
+    });
+    expect(nextState.articles[1].stateAssignment).toMatchObject({
+      resultStatus: "no_state",
+      stateName: "",
+    });
+    expect(nextState.articles[2].stateAssignment).toBeUndefined();
+  });
+
+  it("applyStateAssignments stores content-skipped rows as skipped", () => {
+    const state: FlowState = {
+      currentStage: "state",
+      articles: [
+        {
+          id: "article-1",
+          title: "",
+          source: "Example News",
+          description: "",
+          link: "https://example.com/1",
+        },
+      ],
+    };
+
+    const nextState = flowReducer(
+      state,
+      applyStateAssignments([
+        {
+          articleId: "article-1",
+          assignment: {
+            resultStatus: "skipped",
+            errorMessage: "No usable article title or content.",
+          },
+        },
+      ]),
+    );
+
+    expect(nextState.articles[0].stateAssignment?.resultStatus).toBe("skipped");
+  });
+
+  it("setArticles clears state run status and prompt draft", () => {
+    const state: FlowState = {
+      currentStage: "state",
+      articles: [],
+      statePromptDraft: "edited prompt",
+      stateRun: {
+        status: "completed",
+        processed: 1,
+        total: 1,
+        summary: {
+          eligible: 1,
+          processed: 1,
+          assigned: 1,
+          noState: 0,
+          failed: 0,
+          skipped: 0,
+          alreadyAssigned: 0,
+        },
+      },
+    };
+
+    const nextState = flowReducer(
+      state,
+      setArticles([
+        {
+          id: "article-1",
+          title: "Fresh",
+          source: "Example News",
+          description: "Fresh description",
+          link: "https://example.com/fresh",
+        },
+      ]),
+    );
+
+    expect(nextState.stateRun).toBeUndefined();
+    expect(nextState.statePromptDraft).toBeUndefined();
   });
 });

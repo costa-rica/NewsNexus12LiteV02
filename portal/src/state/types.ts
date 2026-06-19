@@ -77,13 +77,38 @@ export interface LocationRunStatus {
   summary: LocationRunSummary;
 }
 
-/**
- * Reserved stage 5 state assignment shape. It is intentionally minimal here so
- * stage 1 does not pre-build AI assignment behavior.
- */
+export type StateResultStatus = "assigned" | "no_state" | "failed" | "skipped";
+
 export interface StateAssignment {
+  occuredInTheUS?: boolean;
+  reasoning?: string;
   stateName?: string;
-  confidence?: number | null;
+  rawStateText?: string;
+  resultStatus: StateResultStatus;
+  errorMessage?: string;
+}
+
+export interface StateAssignmentResult {
+  articleId: ArticleId;
+  assignment: StateAssignment;
+}
+
+export interface StateRunSummary {
+  eligible: number;
+  processed: number;
+  assigned: number;
+  noState: number;
+  failed: number;
+  skipped: number;
+  alreadyAssigned?: number;
+}
+
+export interface StateRunStatus {
+  status: "idle" | "queued" | "running" | "completed" | "failed" | "cancelled";
+  processed: number;
+  total: number;
+  summary: StateRunSummary;
+  promptUsed?: string;
 }
 
 export interface Article {
@@ -105,4 +130,6 @@ export interface FlowState {
   articles: Article[];
   scrapeRun?: ScrapeRunStatus;
   locationRun?: LocationRunStatus;
+  stateRun?: StateRunStatus;
+  statePromptDraft?: string;
 }

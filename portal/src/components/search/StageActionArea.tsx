@@ -2,6 +2,7 @@
 
 import { LocationBar } from "@/components/location/LocationBar";
 import { ScrapeBar } from "@/components/scrape/ScrapeBar";
+import { StateBar } from "@/components/state/StateBar";
 import { useFlow } from "@/state/FlowContext";
 
 import { SearchBar } from "./SearchBar";
@@ -19,6 +20,10 @@ export function StageActionArea() {
 
   if (state.currentStage === "location") {
     return <LocationBar />;
+  }
+
+  if (state.currentStage === "state") {
+    return <StateBar />;
   }
 
   return null;

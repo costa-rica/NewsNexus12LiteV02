@@ -106,6 +106,102 @@ describe("worker job client", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("retries transient 502 and 504 poll failures before surfacing updates", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockJsonResponse(
+          {
+            error: {
+              code: "BAD_GATEWAY",
+              message: "Bad gateway",
+              status: 502,
+            },
+          },
+          { status: 502 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        mockJsonResponse(
+          {
+            error: {
+              code: "GATEWAY_TIMEOUT",
+              message: "Gateway timeout",
+              status: 504,
+            },
+          },
+          { status: 504 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          jobId: "job-1",
+          workflow: "scrape",
+          endpointName: "scrape",
+          status: "completed",
+          processed: 1,
+          total: 1,
+          summary: {},
+        }),
+      );
+    const updates: string[] = [];
+    vi.stubGlobal("fetch", fetch);
+
+    const job = await pollJob("job-1", {
+      intervalMs: 0,
+      onUpdate: (update) => updates.push(update.status),
+    });
+
+    expect(job.status).toBe("completed");
+    expect(updates).toEqual(["completed"]);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries fetch failed poll errors and recovers", async () => {
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          jobId: "job-1",
+          workflow: "scrape",
+          endpointName: "scrape",
+          status: "completed",
+          processed: 1,
+          total: 1,
+          summary: {},
+        }),
+      );
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(pollJob("job-1", { intervalMs: 0 })).resolves.toMatchObject({
+      status: "completed",
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces non-transient poll errors immediately", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      mockJsonResponse(
+        {
+          error: {
+            code: "NOT_FOUND",
+            message: "Job not found",
+            status: 404,
+          },
+        },
+        { status: 404 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(pollJob("job-1", { intervalMs: 0 })).rejects.toMatchObject({
+      status: 404,
+      code: "NOT_FOUND",
+    } satisfies Partial<WorkerRequestError>);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("treats failed and cancelled as terminal statuses", async () => {
     const fetch = vi
       .fn()
