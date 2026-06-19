@@ -31,6 +31,9 @@ describe("HomePage composition", () => {
     expect(flowIndicator).toBeInTheDocument();
     expect(articlesTableRegion).toBeInTheDocument();
     expect(topBar).toHaveClass("stage-aligned-region");
+    expect(
+      within(topBar).getByRole("button", { name: "About this demo" }),
+    ).toBeInTheDocument();
     expect(flowIndicator).toHaveClass("stage-aligned-region");
     expect(searchRegion).toHaveClass("stage-aligned-region");
     expect(articlesTableRegion).toHaveClass("stage-aligned-region");
