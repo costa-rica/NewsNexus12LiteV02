@@ -2,7 +2,7 @@
 created_at: 2026-06-19
 updated_at: 2026-06-19
 created_by: claude (opus-4.8)
-modified_by: claude (opus-4.8)
+modified_by: codex (gpt-5)
 ---
 
 # State (AI Assigned) — TODO V04
@@ -154,7 +154,7 @@ These two resolutions are unchanged in V04 and remain in force:
 
 ## Phase 1 — Data shapes & reducer (in-memory state)
 
-- [ ] In `portal/src/state/types.ts`, replace the reserved minimal
+- [x] In `portal/src/state/types.ts`, replace the reserved minimal
       `StateAssignment` with the PRD `§6` shape:
   - `StateResultStatus = "assigned" | "no_state" | "failed" | "skipped"`.
   - `StateAssignment` fields: `occuredInTheUS?: boolean` (preserve source
@@ -185,9 +185,9 @@ These two resolutions are unchanged in V04 and remain in force:
       tally, which counts only content-skips.
   - Add `stateRun?: StateRunStatus` and `statePromptDraft?: string` to
     `FlowState`.
-- [ ] Confirm no other consumer relies on the removed `confidence` field
+- [x] Confirm no other consumer relies on the removed `confidence` field
       (grep; expected only `StateCell` + types). Update any that surface.
-- [ ] In `portal/src/state/flowReducer.ts`, add actions + handlers mirroring the
+- [x] In `portal/src/state/flowReducer.ts`, add actions + handlers mirroring the
       Location/Scrape pattern:
   - `setStateRun(stateRun)` — set `state.stateRun`.
   - `applyStateAssignments(results: StateAssignmentResult[])` — build a
@@ -211,25 +211,25 @@ These two resolutions are unchanged in V04 and remain in force:
     `statePromptDraft` (so a new search / reset / fresh flow restores the
     default prompt). `resetFlow` already returns `createInitialFlowState()`;
     ensure the new fields default unset there.
-- [ ] **Verification gate:** `npm run lint`, `npm run typecheck` (or
+- [x] **Verification gate:** `npm run lint`, `npm run typecheck` (or
       `tsc --noEmit`), and the existing `flowReducer.test.ts` still pass. (Run
       from `portal/`; do not run installs.)
 
 ## Phase 2 — Pure libraries (prompt, states, parse) + unit tests
 
-- [ ] `portal/src/lib/state-assigner/defaultPrompt.ts` — export the default
+- [x] `portal/src/lib/state-assigner/defaultPrompt.ts` — export the default
       template **verbatim** from PRD `§4.3` (lines 723–777), keeping the
       `{articleTitle}` and `{articleContent}` placeholders. Single source of
       truth for "default". No external path, no DB.
-- [ ] `portal/src/lib/state-assigner/usStates.ts` — hardcoded U.S. state list
+- [x] `portal/src/lib/state-assigner/usStates.ts` — hardcoded U.S. state list
       (50 states + DC; include territories only if needed for source parity —
       finalize membership here) and a normalize helper that resolves a raw
       string **state-name first, then abbreviation** (PRD `§6`), returning `""`
       when unknown. No DB lookup.
-- [ ] `portal/src/lib/state-assigner/prompt.ts` — pure
+- [x] `portal/src/lib/state-assigner/prompt.ts` — pure
       `buildPrompt(template, { title, content })`; substitute both placeholders;
       if a placeholder is absent it is a no-op (run still proceeds, PRD `§3`).
-- [ ] `portal/src/lib/state-assigner/parse.ts` — pure parse + normalize of an
+- [x] `portal/src/lib/state-assigner/parse.ts` — pure parse + normalize of an
       OpenAI completion into `StateAssignment` (the id-free domain value), no
       network/env:
   1. Missing `choices[0].message.content` → `"failed"`.
@@ -242,7 +242,7 @@ These two resolutions are unchanged in V04 and remain in force:
   5. `occuredInTheUS === true`: full-name match → `"assigned"`; abbreviation
      match → normalize to full name `"assigned"`; missing/blank/unknown →
      `"no_state"` with `stateName: ""` and `rawStateText` preserved.
-- [ ] Unit tests (vitest, existing patterns) colocated per current convention:
+- [x] Unit tests (vitest, existing patterns) colocated per current convention:
   - `defaultPrompt`: retains both placeholders, matches PRD text.
   - `prompt`: substitutes both; no-op when a placeholder removed; empty-string
     title/content.
@@ -252,11 +252,11 @@ These two resolutions are unchanged in V04 and remain in force:
     tolerated; missing required fields → failed; `false` → `no_state`;
     `true`+full name → assigned; `true`+abbreviation → normalized;
     `true`+blank/unknown → `no_state` with `rawStateText`.
-- [ ] **Verification gate:** lint, typecheck, and the new unit tests pass.
+- [x] **Verification gate:** lint, typecheck, and the new unit tests pass.
 
 ## Phase 3 — Server route + client (OpenAI, server-side only)
 
-- [ ] `portal/src/app/api/state-assigner/assign/route.ts` — `POST` handler.
+- [x] `portal/src/app/api/state-assigner/assign/route.ts` — `POST` handler.
       Body: `{ promptTemplate: string, title: string, content: string }`.
   - **Config/validation** → standard error envelope via `errorJson`: missing/
     blank `process.env.KEY_OPEN_AI` → `SERVICE_UNAVAILABLE` (503); malformed/
@@ -277,7 +277,7 @@ These two resolutions are unchanged in V04 and remain in force:
     bare `StateAssignment` (no `articleId`) — the orchestrator owns id pairing.
   - Logging via `serverLogger`: identifiers/counts/statuses/failure types only;
     **never** the prompt, content, request body, or raw response.
-- [ ] `portal/src/lib/state-assigner/client.ts` — thin browser client
+- [x] `portal/src/lib/state-assigner/client.ts` — thin browser client
       `assignArticleState({ promptTemplate, title, content }, signal)` →
       `POST /api/state-assigner/assign`, **returning a bare `StateAssignment`**
       (no `articleId`; the caller pairs it into a `StateAssignmentResult`).
@@ -285,16 +285,16 @@ These two resolutions are unchanged in V04 and remain in force:
       `WorkerRequestError` pattern in `jobClient.ts`) for config/validation
       envelope responses so the orchestrator can treat them as **run-level**
       failures.
-- [ ] Route tests (mock `fetch`/OpenAI; **no real key, no network**): valid
+- [x] Route tests (mock `fetch`/OpenAI; **no real key, no network**): valid
       completion → normalized `StateAssignment`; missing `KEY_OPEN_AI` → error
       envelope; missing/empty `promptTemplate` → `VALIDATION_ERROR`;
       abort/timeout → 200 `failed`; OpenAI non-2xx → 200 `failed`; assert no
       secret/body logging (spy the logger).
-- [ ] **Verification gate:** lint, typecheck, route tests pass.
+- [x] **Verification gate:** lint, typecheck, route tests pass.
 
 ## Phase 4 — UI: action bar, prompt editor, table cell
 
-- [ ] `portal/src/components/state/StateBar.tsx` — action region for the State
+- [x] `portal/src/components/state/StateBar.tsx` — action region for the State
       stage (analog of `LocationBar`). Owns the **client-orchestrated sequential
       loop**:
   - **Start Assigning States** button, disabled until the working set has ≥1
@@ -361,17 +361,17 @@ These two resolutions are unchanged in V04 and remain in force:
     Skipped, plus `Already assigned` if the optional tally is implemented)
     reusing the `LocationBar`/`ScrapeBar` status-card layout. **These summary
     counts are display-only and must not be used as the Next-gating source.**
-- [ ] `portal/src/components/state/StatePromptEditor.tsx` — editable `<textarea>`
+- [x] `portal/src/components/state/StatePromptEditor.tsx` — editable `<textarea>`
       rendered **below** the table. Value reads `state.statePromptDraft ??
       defaultPrompt` (same fallback rule the run trigger uses, so the displayed
       and executed prompts always agree); edits dispatch `setStatePromptDraft`.
       **Disabled while a run is active** (PRD `§3`).
-- [ ] `portal/src/components/search/StageActionArea.tsx` — add the `"state"`
+- [x] `portal/src/components/search/StageActionArea.tsx` — add the `"state"`
       branch → `<StateBar />` (mirror the existing `scrape`/`location` branches).
-- [ ] `portal/src/app/page.tsx` — render the prompt editor **after**
+- [x] `portal/src/app/page.tsx` — render the prompt editor **after**
       `<ArticlesTable />` via a small client wrapper that returns `null` unless
       `currentStage === "state"` (keeps the table above the editor, PRD `§3`).
-- [ ] `portal/src/components/tables/cells/StateCell.tsx` — render by
+- [x] `portal/src/components/tables/cells/StateCell.tsx` — render by
       `assignment.resultStatus` (PRD `§7`): `undefined` (not run) → empty;
       `"assigned"` → full `stateName`, compact text-link treatment (keep
       existing link style); `"no_state"` → `No state`; `"failed"`/`"skipped"` →
@@ -382,12 +382,12 @@ These two resolutions are unchanged in V04 and remain in force:
       value, `occuredInTheUS`, reasoning, current-run error), same pattern as
       `ScrapeModal`. Wire `StateCell` `onOpen` to it. All in-memory only. If
       added, keep the column contract unchanged.
-- [ ] **Verification gate:** lint, typecheck pass; existing component/smoke
+- [x] **Verification gate:** lint, typecheck pass; existing component/smoke
       tests still pass.
 
 ## Phase 5 — Flow gating, component/reducer tests, build
 
-- [ ] `portal/src/components/layout/FlowIndicatorBar.tsx` — add a `state` clause
+- [x] `portal/src/components/layout/FlowIndicatorBar.tsx` — add a `state` clause
       to `canAdvance` that derives **solely from the current in-memory article
       set** (the V03→V04 fix). **Single, unambiguous rule:**
   - **Enable Next for the `state` step when both hold:**
@@ -418,14 +418,14 @@ These two resolutions are unchanged in V04 and remain in force:
       `state.articles` (this is the exact case Codex flagged; gating must not
       regress).
     - Mixed results → Next **enabled**; failed rows stay visible as `N/A`.
-- [ ] Reducer tests (`flowReducer.test.ts`): `setStateRun`;
+- [x] Reducer tests (`flowReducer.test.ts`): `setStateRun`;
       `applyStateAssignments` **merges by `articleId`** using the
       `StateAssignmentResult` wrapper (assert an out-of-order / partial-set batch
       lands on the correct `article.stateAssignment`, and that an unknown
       `articleId` is ignored — proving position-independent merge);
       `setStatePromptDraft`/clear; `setArticles` and `resetFlow` clear
       `stateRun` + `statePromptDraft`.
-- [ ] **Rerun skip tests (carried from V03).** Add explicit coverage proving the
+- [x] **Rerun skip tests (carried from V03).** Add explicit coverage proving the
       two skip cases behave differently:
   - **Content-skip is stored:** a `StateAssignmentResult` whose
     `assignment.resultStatus === "skipped"` dispatched through
@@ -445,7 +445,7 @@ These two resolutions are unchanged in V04 and remain in force:
   - **(If the `alreadyAssigned` summary tally is implemented):** assert the
     excluded rows increment `summary.alreadyAssigned` and are **not** added to
     `summary.skipped`.
-- [ ] **Rerun gating regression test (the V03→V04 fix).** Add explicit coverage
+- [x] **Rerun gating regression test (the V03→V04 fix).** Add explicit coverage
       proving a rerun that excludes already-completed rows does **not** regress
       Next gating. This is the concrete behavior Codex required:
   - **Setup:** build a `FlowState` (or render `FlowIndicatorBar` with a state)
@@ -470,29 +470,29 @@ These two resolutions are unchanged in V04 and remain in force:
   - **Active-run negative test:** with `state.stateRun.status === "running"` (or
     `"queued"`), assert `canAdvance` is **`false`** even when valid assignments
     exist in the article set — proving condition (1) gates during a run.
-- [ ] Component tests: `StateBar` gating (disabled until ≥1 article; Cancel +
+- [x] Component tests: `StateBar` gating (disabled until ≥1 article; Cancel +
       disabled Start while running) **and** default-prompt fallback (with
       `statePromptDraft` unset, the run snapshots `promptUsed === defaultPrompt`
       and posts a non-empty `promptTemplate`); `StatePromptEditor` seeds default
       (unset draft renders `defaultPrompt`) and is disabled during a run;
       `StateCell` rendering for each `resultStatus`; `FlowIndicatorBar`
       `canAdvance` for `state` (covered by the gating tests above).
-- [ ] Smoke: existing `page.test.tsx` / smoke tests still pass.
-- [ ] **Verification gate (full):** `npm run lint`, typecheck, **all** tests,
+- [x] Smoke: existing `page.test.tsx` / smoke tests still pass.
+- [x] **Verification gate (full):** `npm run lint`, typecheck, **all** tests,
       and `npm run build` per `PLAN_AND_VET.md`. Fix any failures while
       preserving behavior, then check off tasks and commit per AGENTS.md commit
       guidance (reference this TODO + phase).
 
 ## Phase 6 — Docs & env example
 
-- [ ] Confirm `KEY_OPEN_AI` is documented in the portal env example
+- [x] Confirm `KEY_OPEN_AI` is documented in the portal env example
       (e.g. `.env.example` / `.env.local.example` if present); add it if
       missing, **without** a real value. No other new env vars
       (`PATH_TO_STATE_ASSIGNER_FILES` is **not** needed — prompt is embedded).
-- [ ] Update any stage-tracking/build-sequence note only if the repo convention
+- [x] Update any stage-tracking/build-sequence note only if the repo convention
       requires marking stage 5 progress; do not invent new docs. Keep filename/
       frontmatter conventions (AGENTS.md).
-- [ ] **Verification gate:** lint/build still green; commit doc/env changes.
+- [x] **Verification gate:** lint/build still green; commit doc/env changes.
 
 ---
 

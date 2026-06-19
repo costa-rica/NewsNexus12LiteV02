@@ -3,6 +3,9 @@ import type {
   FlowState,
   LocationRunStatus,
   LocationScore,
+  StateAssignment,
+  StateAssignmentResult,
+  StateRunStatus,
   ScrapeResult,
   ScrapeRunStatus,
   StageKey,
@@ -15,6 +18,9 @@ export type FlowAction =
   | { type: "applyScrapeResults"; results: ScrapeResult[] }
   | { type: "setLocationRun"; locationRun: LocationRunStatus }
   | { type: "applyLocationRatings"; scores: LocationScore[]; skippedIds: string[] }
+  | { type: "setStateRun"; stateRun: StateRunStatus }
+  | { type: "applyStateAssignments"; results: StateAssignmentResult[] }
+  | { type: "setStatePromptDraft"; draft: string | undefined }
   | { type: "resetFlow" };
 
 export function createInitialFlowState(): FlowState {
@@ -53,6 +59,24 @@ export function applyLocationRatings(
   return { type: "applyLocationRatings", scores, skippedIds };
 }
 
+export function setStateRun(stateRun: StateRunStatus): FlowAction {
+  return { type: "setStateRun", stateRun };
+}
+
+export function applyStateAssignments(
+  results: StateAssignmentResult[],
+): FlowAction {
+  return { type: "applyStateAssignments", results };
+}
+
+export function setStatePromptDraft(draft: string | undefined): FlowAction {
+  return { type: "setStatePromptDraft", draft };
+}
+
+export function clearStatePromptDraft(): FlowAction {
+  return setStatePromptDraft(undefined);
+}
+
 export function resetFlow(): FlowAction {
   return { type: "resetFlow" };
 }
@@ -70,6 +94,8 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         articles: action.articles,
         scrapeRun: undefined,
         locationRun: undefined,
+        stateRun: undefined,
+        statePromptDraft: undefined,
       };
     case "setScrapeRun":
       return {
@@ -128,6 +154,41 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         }),
       };
     }
+    case "setStateRun":
+      return {
+        ...state,
+        stateRun: action.stateRun,
+      };
+    case "applyStateAssignments": {
+      const assignmentById = new Map<Article["id"], StateAssignment>(
+        action.results
+          .filter((result): result is StateAssignmentResult =>
+            Boolean(result.articleId),
+          )
+          .map((result) => [result.articleId, result.assignment]),
+      );
+
+      return {
+        ...state,
+        articles: state.articles.map((article) => {
+          const assignment = assignmentById.get(article.id);
+
+          if (!assignment) {
+            return article;
+          }
+
+          return {
+            ...article,
+            stateAssignment: assignment,
+          };
+        }),
+      };
+    }
+    case "setStatePromptDraft":
+      return {
+        ...state,
+        statePromptDraft: action.draft,
+      };
     case "resetFlow":
       return createInitialFlowState();
     default:
