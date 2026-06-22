@@ -32,6 +32,7 @@ describe("SlideStage", () => {
     const stage = screen.getByTestId("slide-stage");
     expect(stage).toHaveAttribute("data-current-stage", "search");
     expect(screen.getAllByRole("columnheader")).toHaveLength(7);
+    expect(screen.getByTestId("app-footer")).toHaveTextContent("version dev");
 
     fireEvent.click(screen.getByRole("button", { name: "Move stage" }));
 

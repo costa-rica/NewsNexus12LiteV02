@@ -26,10 +26,12 @@ describe("HomePage composition", () => {
       name: /google rss search/i,
     });
     const articlesTableRegion = withinStage.getByTestId("articles-table-region");
+    const footer = withinStage.getByTestId("app-footer");
 
     expect(topBar).toBeInTheDocument();
     expect(flowIndicator).toBeInTheDocument();
     expect(articlesTableRegion).toBeInTheDocument();
+    expect(footer).toHaveTextContent("version dev");
     expect(topBar).toHaveClass("stage-aligned-region");
     expect(
       within(topBar).getByRole("button", { name: "About this demo" }),
@@ -37,6 +39,7 @@ describe("HomePage composition", () => {
     expect(flowIndicator).toHaveClass("stage-aligned-region");
     expect(searchRegion).toHaveClass("stage-aligned-region");
     expect(articlesTableRegion).toHaveClass("stage-aligned-region");
+    expect(footer).toHaveClass("stage-aligned-region");
     expect(slideStage).toHaveAttribute("data-current-stage", "search");
     expect(
       withinStage.getByRole("button", { name: /next/i }),

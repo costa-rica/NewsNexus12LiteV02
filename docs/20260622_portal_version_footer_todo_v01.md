@@ -73,20 +73,20 @@ would fall off-screen or into the border band. `TopBar` already lives inside
 per-stage parallax. Putting it in the `SlideStage` component (not `page.tsx`) means every page
 using `SlideStage` gets it automatically.
 
-- [ ] Create `portal/src/components/layout/Footer.tsx`: small, muted, theme-aware text rendering
+- [x] Create `portal/src/components/layout/Footer.tsx`: small, muted, theme-aware text rendering
       `version {process.env.NEXT_PUBLIC_APP_VERSION}`; apply the `.stage-aligned-region` class for
       horizontal alignment; add a divider / top spacing above it.
-- [ ] In `portal/src/components/layout/SlideStage.tsx`, wrap `{children}` in a `flex: 1` div and
+- [x] In `portal/src/components/layout/SlideStage.tsx`, wrap `{children}` in a `flex: 1` div and
       render `<Footer />` as its sibling inside `slide-stage__content`, so the footer anchors to
       the bottom of the full-height card.
-- [ ] In `portal/src/app/globals.css`, make `.slide-stage__content` a flex column
+- [x] In `portal/src/app/globals.css`, make `.slide-stage__content` a flex column
       (`display: flex; flex-direction: column;`) and give the children wrapper `flex: 1 1 auto`.
       Keep exactly two flex items (content wrapper + footer) so existing children's internal
       layout is untouched.
-- [ ] Verify existing content (TopBar, FlowIndicatorBar, StageActionArea, ArticlesTable, editor
+- [x] Verify existing content (TopBar, FlowIndicatorBar, StageActionArea, ArticlesTable, editor
       slots) still stacks and spaces correctly after the flex change; confirm the footer sits at
       the bottom of the card in dark mode and that the per-stage parallax still reads naturally.
-- [ ] End-of-phase checks (type/lint/test/build for portal). Check off and commit.
+- [x] End-of-phase checks (type/lint/test/build for portal). Check off and commit.
 
 ---
 

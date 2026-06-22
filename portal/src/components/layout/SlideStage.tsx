@@ -5,6 +5,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { getStageByKey, getStageIndex } from "@/lib/pipeline";
 import { useFlow } from "@/state/FlowContext";
 
+import { Footer } from "./Footer";
+
 interface SlideStageProps {
   children: ReactNode;
 }
@@ -37,7 +39,10 @@ export function SlideStage({ children }: SlideStageProps) {
         className="slide-stage"
       >
         <div className="slide-stage__viewport">
-          <div className="slide-stage__content">{children}</div>
+          <div className="slide-stage__content">
+            <div className="slide-stage__main">{children}</div>
+            <Footer />
+          </div>
         </div>
       </section>
     </main>

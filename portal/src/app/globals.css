@@ -124,9 +124,16 @@
 .slide-stage__content {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
   min-height: inherit;
   transform: translateX(calc(var(--stage-index) * 12px));
   transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide-stage__main {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .stage-aligned-region {
