@@ -41,15 +41,16 @@ npm workspace migration that enables single-command install/build.
 
 ## Phase 2 — shared version script (single source of truth)
 
-- [ ] Create `scripts/appVersion.mjs` at the repo root.
-- [ ] Implement the git logic with `child_process`:
+- [x] Create `scripts/appVersion.mjs` at the repo root.
+- [x] Implement the git logic with `child_process`:
       `main_count = git rev-list --count $(git merge-base HEAD main)`,
       `branch_count = git rev-list --count $(git merge-base HEAD main)..HEAD`,
       returning the string `"{main_count}.{branch_count}"`.
-- [ ] Wrap in try/catch: on any failure (git missing, `.git` absent, no `main`), return `"dev"`.
-- [ ] Verify from `portal/` the root `.git` is still found (run the script with cwd = `portal/`).
-- [ ] End-of-phase checks (no test infra for a standalone script — at minimum run the script and
-      confirm it prints the current `{main_count}.0` on `main`), then check off and commit.
+- [x] Wrap in try/catch: on any failure (git missing, `.git` absent, no `main`), return `"dev"`.
+- [x] Verify from `portal/` the root `.git` is still found (run the script with cwd = `portal/`).
+- [x] End-of-phase checks (no test infra for a standalone script — at minimum run the script and
+      confirm it prints the current branch-aware `{main_count}.{branch_count}`), then check off
+      and commit.
 
 ## Phase 3 — portal build-time injection
 
