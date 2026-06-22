@@ -14,5 +14,10 @@
     "start:worker": "npm run start -w worker-node",
     "test": "npm run test --workspaces --if-present",
     "type-check": "npm run type-check --workspaces --if-present"
+  },
+  "overrides": {
+    "next@16.2.9": {
+      "postcss": "8.5.15"
+    }
   }
 }
