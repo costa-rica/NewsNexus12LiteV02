@@ -24,19 +24,20 @@ npm workspace migration that enables single-command install/build.
 
 ## Phase 1 — npm workspace migration
 
-- [ ] Create a root `package.json` with `"private": true` and
+- [x] Create a root `package.json` with `"private": true` and
       `"workspaces": ["portal", "worker-node"]`.
-- [ ] Add root convenience scripts: `build` (`npm run build --workspaces --if-present`),
+- [x] Add root convenience scripts: `build` (`npm run build --workspaces --if-present`),
       `dev:portal` (`npm run dev -w portal`), `dev:worker` (`npm run dev -w worker-node`),
       and `lint` / `test` fanned across workspaces.
-- [ ] Delete `portal/package-lock.json` and `worker-node/package-lock.json`.
-- [ ] Run a single root `npm install` to produce one hoisted `node_modules` and one root
+- [x] Delete `portal/package-lock.json` and `worker-node/package-lock.json`.
+- [x] Run a single root `npm install` to produce one hoisted `node_modules` and one root
       `package-lock.json`.
-- [ ] Confirm `.gitignore` ignores root `node_modules`; leave each package's `.env.local` in place.
-- [ ] Smoke-test: `npm run build` at root builds both packages; `npm run dev:portal` and
-      `npm run dev:worker` each start.
+- [x] Confirm `.gitignore` ignores root `node_modules`; leave each package's `.env.local` in place.
+- [x] Smoke-test: `npm run build` at root builds both packages; `npm run dev:portal` starts
+      cleanly; `npm run dev:worker` listens on port 3000 and exposes the existing location
+      classifier warm-up issue in TS watch mode.
 - [ ] (Optional) Note the new root commands in `AGENTS.md`.
-- [ ] End-of-phase checks (type/lint/test/build), then check off and commit.
+- [x] End-of-phase checks (type/lint/test/build), then check off and commit.
 
 ## Phase 2 — shared version script (single source of truth)
 

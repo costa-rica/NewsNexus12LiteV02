@@ -1,0 +1,16 @@
+{
+  "name": "news-nexus-12-lite-v02",
+  "private": true,
+  "workspaces": [
+    "portal",
+    "worker-node"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:portal": "npm run dev -w portal",
+    "dev:worker": "npm run dev -w worker-node",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "type-check": "npm run type-check --workspaces --if-present"
+  }
+}
