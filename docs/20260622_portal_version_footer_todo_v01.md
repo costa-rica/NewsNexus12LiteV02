@@ -54,13 +54,13 @@ npm workspace migration that enables single-command install/build.
 
 ## Phase 3 — portal build-time injection
 
-- [ ] In `portal/next.config.ts`, call `../scripts/appVersion.mjs` during config evaluation
+- [x] In `portal/next.config.ts`, call `../scripts/appVersion.mjs` during config evaluation
       (runs at `next dev` start and `next build`).
-- [ ] Set `env: { NEXT_PUBLIC_APP_VERSION: <computed string> }` so the value is inlined into the
+- [x] Set `env: { NEXT_PUBLIC_APP_VERSION: <computed string> }` so the value is inlined into the
       bundle and readable on the client.
-- [ ] Confirm importing a sibling module outside `portal/` works under the project's config; if
+- [x] Confirm importing a sibling module outside `portal/` works under the project's config; if
       not, shell out to the script from within `next.config.ts` instead.
-- [ ] End-of-phase checks (type/lint/test/build for portal); confirm
+- [x] End-of-phase checks (type/lint/test/build for portal); confirm
       `process.env.NEXT_PUBLIC_APP_VERSION` resolves at runtime. Check off and commit.
 
 ## Phase 4 — footer component and placement
