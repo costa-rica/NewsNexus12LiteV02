@@ -3,6 +3,9 @@ import type {
   FlowState,
   LocationRunStatus,
   LocationScore,
+  SemanticFailure,
+  SemanticRunStatus,
+  SemanticScore,
   StateAssignment,
   StateAssignmentResult,
   StateRunStatus,
@@ -21,6 +24,14 @@ export type FlowAction =
   | { type: "setStateRun"; stateRun: StateRunStatus }
   | { type: "applyStateAssignments"; results: StateAssignmentResult[] }
   | { type: "setStatePromptDraft"; draft: string | undefined }
+  | { type: "setSemanticRun"; semanticRun: SemanticRunStatus }
+  | {
+      type: "applySemanticRatings";
+      scores: SemanticScore[];
+      skippedIds: string[];
+      failures: SemanticFailure[];
+    }
+  | { type: "setSemanticKeywordDraft"; draft: string | undefined }
   | { type: "resetFlow" };
 
 export function createInitialFlowState(): FlowState {
@@ -73,6 +84,22 @@ export function setStatePromptDraft(draft: string | undefined): FlowAction {
   return { type: "setStatePromptDraft", draft };
 }
 
+export function setSemanticRun(semanticRun: SemanticRunStatus): FlowAction {
+  return { type: "setSemanticRun", semanticRun };
+}
+
+export function applySemanticRatings(
+  scores: SemanticScore[],
+  skippedIds: string[],
+  failures: SemanticFailure[],
+): FlowAction {
+  return { type: "applySemanticRatings", scores, skippedIds, failures };
+}
+
+export function setSemanticKeywordDraft(draft: string | undefined): FlowAction {
+  return { type: "setSemanticKeywordDraft", draft };
+}
+
 export function clearStatePromptDraft(): FlowAction {
   return setStatePromptDraft(undefined);
 }
@@ -95,7 +122,9 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
         scrapeRun: undefined,
         locationRun: undefined,
         stateRun: undefined,
+        semanticRun: undefined,
         statePromptDraft: undefined,
+        semanticKeywordDraft: undefined,
       };
     case "setScrapeRun":
       return {
@@ -188,6 +217,65 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       return {
         ...state,
         statePromptDraft: action.draft,
+      };
+    case "setSemanticRun":
+      return {
+        ...state,
+        semanticRun: action.semanticRun,
+      };
+    case "applySemanticRatings": {
+      const scoreById = new Map(
+        action.scores.map((score) => [score.article_id, score]),
+      );
+      const skipped = new Set(action.skippedIds);
+      const failureById = new Map(
+        action.failures.map((failure) => [failure.article_id, failure]),
+      );
+
+      return {
+        ...state,
+        articles: state.articles.map((article) => {
+          const score = scoreById.get(article.id);
+          if (score) {
+            return {
+              ...article,
+              semanticRating: score.score,
+              semanticRatingMax: score.score,
+              semanticRatingMaxLabel: score.rating_for,
+              semanticRatingStatus: "scored",
+              semanticRatingError: undefined,
+            };
+          }
+
+          if (skipped.has(article.id)) {
+            return {
+              ...article,
+              semanticRating: null,
+              semanticRatingMax: null,
+              semanticRatingStatus: "skipped",
+              semanticRatingError: undefined,
+            };
+          }
+
+          const failure = failureById.get(article.id);
+          if (failure) {
+            return {
+              ...article,
+              semanticRating: null,
+              semanticRatingMax: null,
+              semanticRatingStatus: "failed",
+              semanticRatingError: failure.reason,
+            };
+          }
+
+          return article;
+        }),
+      };
+    }
+    case "setSemanticKeywordDraft":
+      return {
+        ...state,
+        semanticKeywordDraft: action.draft,
       };
     case "resetFlow":
       return createInitialFlowState();

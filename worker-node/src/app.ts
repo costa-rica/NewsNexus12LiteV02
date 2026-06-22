@@ -6,10 +6,13 @@ import type { ScrapeProcessor } from "./modules/article-content-02/enrichment.js
 import { createArticleContentScraperRouter } from "./modules/article-content-02/routes.js";
 import { createLocationScorerRouter } from "./modules/location-scorer/routes.js";
 import type { LocationClassifier } from "./modules/location-scorer/types.js";
+import { createSemanticScorerRouter } from "./modules/semantic-scorer/routes.js";
+import type { SemanticScorer } from "./modules/semantic-scorer/types.js";
 
 interface CreateAppOptions {
   scrapeProcessor?: ScrapeProcessor;
   locationClassifier?: LocationClassifier;
+  semanticScorer?: SemanticScorer;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -30,6 +33,11 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(
     createLocationScorerRouter({
       classifier: options.locationClassifier,
+    }),
+  );
+  app.use(
+    createSemanticScorerRouter({
+      scorer: options.semanticScorer,
     }),
   );
 

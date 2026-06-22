@@ -50,6 +50,7 @@ export function StateBar() {
   const latestRunRef = useRef<StateRunStatus | null>(null);
   const run = state.stateRun;
   const isActive = run?.status === "queued" || run?.status === "running";
+  const hasCompletedRun = run?.status === "completed";
 
   const updateRun = (nextRun: StateRunStatus) => {
     latestRunRef.current = nextRun;
@@ -57,6 +58,10 @@ export function StateBar() {
   };
 
   const handleStart = async () => {
+    if (hasCompletedRun) {
+      return;
+    }
+
     if (state.articles.length === 0 || isActive) {
       setStatus({
         type: "warning",
@@ -237,7 +242,7 @@ export function StateBar() {
             <button
               type="button"
               onClick={handleStart}
-              disabled={isActive || state.articles.length === 0}
+              disabled={isActive || hasCompletedRun || state.articles.length === 0}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white shadow-theme-sm transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
             >
               <BrainCircuit aria-hidden="true" className="h-4 w-4" />

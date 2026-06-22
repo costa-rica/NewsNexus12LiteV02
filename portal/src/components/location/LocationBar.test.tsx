@@ -85,7 +85,46 @@ describe("LocationBar", () => {
       expect(screen.getByText("92%")).toBeInTheDocument();
     });
     expect(screen.getByText("N/A")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Rating" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+  });
+
+  it("shows a progress dialog while location rating is running", async () => {
+    (startLocationJob as unknown as Mock).mockResolvedValue(queued);
+    (pollJob as unknown as Mock).mockImplementation(() => new Promise(() => {}));
+
+    renderHarness();
+    fireEvent.click(screen.getByRole("button", { name: "Start Rating" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Rating article locations",
+    });
+    expect(dialog).toHaveTextContent("Rating article locations");
+    expect(dialog).toHaveTextContent("0/0 classified");
+    expect(dialog).toHaveTextContent("Eligible 0");
+    expect(dialog).toHaveTextContent("Classified 0");
+    expect(dialog).toHaveTextContent("Skipped 0");
+    expect(dialog).toHaveTextContent("Total 2");
+  });
+
+  it("shows model loading copy while the worker is loading the classifier", async () => {
+    const loadingModelState: FlowState = {
+      ...initialState,
+      locationRun: {
+        status: "running",
+        processed: 0,
+        total: 2,
+        summary: { eligible: 0, processed: 0, skipped: 0, modelLoading: 1 },
+      },
+    };
+
+    renderHarness(loadingModelState);
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Rating article locations",
+    });
+    expect(dialog).toHaveTextContent("Loading location model");
+    expect(dialog).toHaveTextContent("Preparing the AI classifier");
   });
 
   it("warns and keeps Next disabled when every article is skipped", async () => {

@@ -8,6 +8,7 @@ export function FlowIndicatorBar() {
   const { state } = useFlow();
   const stateRunActive =
     state.stateRun?.status === "queued" || state.stateRun?.status === "running";
+  const semanticRunActive = state.semanticRun?.status === "running";
   const hasValidStateAssignment = state.articles.some(
     (article) =>
       article.stateAssignment?.resultStatus === "assigned" ||
@@ -22,7 +23,11 @@ export function FlowIndicatorBar() {
       state.locationRun.summary.processed > 0) ||
     (state.currentStage === "state" &&
       !stateRunActive &&
-      hasValidStateAssignment);
+      hasValidStateAssignment) ||
+    (state.currentStage === "semantic" &&
+      !semanticRunActive &&
+      state.semanticRun?.status === "completed" &&
+      state.semanticRun.summary.processed > 0);
 
   return <FlowIndicator canAdvance={canAdvance} />;
 }

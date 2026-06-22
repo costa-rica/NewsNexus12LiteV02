@@ -71,14 +71,27 @@ export const articleColumns = [
     header: "State (AI Assigned)",
     cell: ({ getValue }) => <StateCell assignment={getValue()} />,
   }),
-  columnHelper.accessor("semanticRating", {
+  columnHelper.accessor(
+    (article) =>
+      article.semanticRatingMax !== undefined
+        ? article.semanticRatingMax
+        : article.semanticRating,
+    {
     id: "semanticRating",
     header: "Nexus Semantic Rating",
-    cell: ({ getValue }) => (
-      <RatingCircle
-        score={getValue()}
-        ariaLabel="Nexus Semantic Rating"
-      />
-    ),
-  }),
+      cell: ({ getValue }) => {
+        const value = getValue();
+
+        if (value === null) {
+          return (
+            <span className="block text-center text-xs text-gray-400">N/A</span>
+          );
+        }
+
+        return (
+          <RatingCircle score={value} ariaLabel="Nexus Semantic Rating" />
+        );
+      },
+    },
+  ),
 ];

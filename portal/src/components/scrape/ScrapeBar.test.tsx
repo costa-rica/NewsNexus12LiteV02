@@ -189,6 +189,7 @@ describe("ScrapeBar", () => {
     expect(screen.getByText("Success 1")).toBeInTheDocument();
     expect(screen.getByText("Failed 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open scraped article" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scrape" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
   });
 

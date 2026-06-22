@@ -4,6 +4,7 @@ import { StatePromptEditorSlot } from "@/components/state/StatePromptEditor";
 import { TopBar } from "@/components/layout/TopBar";
 import { StageActionArea } from "@/components/search/StageActionArea";
 import { ArticlesTable } from "@/components/tables/ArticlesTable";
+import { SemanticKeywordEditorSlot } from "@/components/semantic/SemanticKeywordEditor";
 
 export default function HomePage() {
   return (
@@ -13,6 +14,7 @@ export default function HomePage() {
       <StageActionArea />
       <ArticlesTable />
       <StatePromptEditorSlot />
+      <SemanticKeywordEditorSlot />
     </SlideStage>
   );
 }

@@ -111,6 +111,33 @@ export interface StateRunStatus {
   promptUsed?: string;
 }
 
+export interface SemanticScore {
+  article_id: ArticleId;
+  score: number;
+  rating_for: string;
+}
+
+export interface SemanticFailure {
+  article_id: ArticleId;
+  reason: "timeout" | "error" | "no_score";
+}
+
+export interface SemanticRunSummary {
+  eligible: number;
+  processed: number;
+  skipped: number;
+  failed: number;
+  modelLoading: number;
+}
+
+export interface SemanticRunStatus {
+  status: "idle" | "running" | "completed" | "failed" | "cancelled";
+  processed: number;
+  total: number;
+  summary: SemanticRunSummary;
+  keywordsUsed?: string[];
+}
+
 export interface Article {
   id: ArticleId;
   title: string;
@@ -123,6 +150,10 @@ export interface Article {
   locationRating?: number | null;
   stateAssignment?: StateAssignment;
   semanticRating?: number | null;
+  semanticRatingMax?: number | null;
+  semanticRatingMaxLabel?: string;
+  semanticRatingStatus?: "scored" | "skipped" | "failed";
+  semanticRatingError?: string;
 }
 
 export interface FlowState {
@@ -131,5 +162,7 @@ export interface FlowState {
   scrapeRun?: ScrapeRunStatus;
   locationRun?: LocationRunStatus;
   stateRun?: StateRunStatus;
+  semanticRun?: SemanticRunStatus;
   statePromptDraft?: string;
+  semanticKeywordDraft?: string;
 }

@@ -92,6 +92,9 @@ describe("StateBar", () => {
       expect.any(AbortSignal),
     );
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Start Assigning States" }),
+    ).toBeDisabled();
   });
 
   it("shows cancel and disables start while a run is active", async () => {

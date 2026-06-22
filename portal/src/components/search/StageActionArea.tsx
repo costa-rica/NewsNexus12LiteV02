@@ -2,6 +2,7 @@
 
 import { LocationBar } from "@/components/location/LocationBar";
 import { ScrapeBar } from "@/components/scrape/ScrapeBar";
+import { SemanticBar } from "@/components/semantic/SemanticBar";
 import { StateBar } from "@/components/state/StateBar";
 import { useFlow } from "@/state/FlowContext";
 
@@ -26,5 +27,5 @@ export function StageActionArea() {
     return <StateBar />;
   }
 
-  return null;
+  return <SemanticBar />;
 }

@@ -33,9 +33,14 @@ export function ScrapeBar() {
   const { state, dispatch } = useFlow();
   const [status, setStatus] = useState<ScrapeBarStatus>({ type: "idle" });
   const isRunning = state.scrapeRun?.status === "running";
+  const hasCompletedRun = state.scrapeRun?.status === "completed";
   const run = state.scrapeRun;
 
   const handleScrape = async () => {
+    if (hasCompletedRun) {
+      return;
+    }
+
     if (state.articles.length === 0) {
       setStatus({
         type: "warning",
@@ -112,7 +117,7 @@ export function ScrapeBar() {
           <button
             type="button"
             onClick={handleScrape}
-            disabled={isRunning || state.articles.length === 0}
+            disabled={isRunning || hasCompletedRun || state.articles.length === 0}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white shadow-theme-sm transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
           >
             <FileSearch aria-hidden="true" className="h-4 w-4" />

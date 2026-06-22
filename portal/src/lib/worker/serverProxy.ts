@@ -30,6 +30,23 @@ export async function proxyWorkerRequest(path: string, init: RequestInit = {}) {
         method: init.method ?? "GET",
         status: workerResponse.status,
       });
+
+      if (!hasErrorEnvelope(body)) {
+        return errorJson({
+          code: workerResponse.status === 404 ? "NOT_FOUND" : "WORKER_ERROR",
+          message:
+            workerResponse.status === 404
+              ? "Worker endpoint unavailable. Restart the worker and try again."
+              : "Worker request failed. Please try again.",
+          status: workerResponse.status,
+          logMeta: {
+            path,
+            method: init.method ?? "GET",
+            workerUrl,
+            workerStatus: workerResponse.status,
+          },
+        });
+      }
     }
 
     return new Response(body, {
@@ -46,5 +63,19 @@ export async function proxyWorkerRequest(path: string, init: RequestInit = {}) {
       details: error instanceof Error ? error.message : "unknown_error",
       logMeta: { path, method: init.method ?? "GET", workerUrl },
     });
+  }
+}
+
+function hasErrorEnvelope(body: string) {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    return (
+      !!parsed.error &&
+      typeof parsed.error === "object" &&
+      parsed.error !== null &&
+      "message" in parsed.error
+    );
+  } catch {
+    return false;
   }
 }

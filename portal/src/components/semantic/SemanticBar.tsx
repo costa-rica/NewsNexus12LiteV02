@@ -1,38 +1,46 @@
 "use client";
 
-import { MapPin } from "lucide-react";
+import { BrainCircuit } from "lucide-react";
 import { useState } from "react";
 
 import { LoadingDots } from "@/components/common/LoadingDots";
+import {
+  defaultSemanticKeywordDraft,
+  parseSemanticKeywords,
+} from "@/lib/semantic-scorer/defaultKeywords";
 import { pollJob, WorkerRequestError } from "@/lib/worker/jobClient";
 import {
-  type LocationJob,
-  type LocationResults,
-  startLocationJob,
-} from "@/lib/worker/locationClient";
-import { applyLocationRatings, setLocationRun } from "@/state/flowReducer";
+  startSemanticJob,
+  type SemanticJob,
+  type SemanticResults,
+} from "@/lib/worker/semanticClient";
+import {
+  applySemanticRatings,
+  setSemanticRun,
+} from "@/state/flowReducer";
 import { useFlow } from "@/state/FlowContext";
-import type { LocationRunStatus, LocationRunSummary } from "@/state/types";
+import type { SemanticRunStatus, SemanticRunSummary } from "@/state/types";
 
-type LocationBarStatus =
+type SemanticBarStatus =
   | { type: "idle" }
   | { type: "warning"; message: string }
   | { type: "error"; message: string };
 
-const EMPTY_SUMMARY: LocationRunSummary = {
+const EMPTY_SUMMARY: SemanticRunSummary = {
   eligible: 0,
   processed: 0,
   skipped: 0,
+  failed: 0,
   modelLoading: 0,
 };
 
-export function LocationBar() {
+export function SemanticBar() {
   const { state, dispatch } = useFlow();
-  const [status, setStatus] = useState<LocationBarStatus>({ type: "idle" });
-  const run = state.locationRun;
+  const [status, setStatus] = useState<SemanticBarStatus>({ type: "idle" });
+  const run = state.semanticRun;
   const isRunning = run?.status === "running";
   const hasCompletedRun = run?.status === "completed";
-  const isLoadingModel = isRunning && run?.summary.modelLoading === 1;
+  const keywordDraft = state.semanticKeywordDraft ?? defaultSemanticKeywordDraft;
 
   const handleRate = async () => {
     if (hasCompletedRun) {
@@ -47,39 +55,60 @@ export function LocationBar() {
       return;
     }
 
+    const keywords = parseSemanticKeywords(keywordDraft);
+
+    if (keywords.length === 0) {
+      setStatus({
+        type: "warning",
+        message: "Add at least one semantic keyword before rating.",
+      });
+      return;
+    }
+
     setStatus({ type: "idle" });
     dispatch(
-      setLocationRun({
+      setSemanticRun({
         status: "running",
         processed: 0,
         total: state.articles.length,
         summary: EMPTY_SUMMARY,
+        keywordsUsed: keywords,
       }),
     );
 
     try {
-      const startResponse = await startLocationJob(state.articles);
-      const terminalJob = await pollJob<LocationResults, LocationRunSummary>(
+      const startResponse = await startSemanticJob(state.articles, keywords);
+      const terminalJob = await pollJob<SemanticResults, SemanticRunSummary>(
         startResponse.jobId,
         {
-          onUpdate: (job) => dispatch(setLocationRun(toLocationRunStatus(job))),
+          onUpdate: (job) =>
+            dispatch(setSemanticRun(toSemanticRunStatus(job, keywords))),
         },
       );
 
-      dispatch(setLocationRun(toLocationRunStatus(terminalJob)));
+      dispatch(setSemanticRun(toSemanticRunStatus(terminalJob, keywords)));
+
+      if (terminalJob.status === "failed") {
+        setStatus({
+          type: "error",
+          message: "Semantic rating job failed. Please try again.",
+        });
+        return;
+      }
 
       if (terminalJob.status === "completed" && terminalJob.results) {
         dispatch(
-          applyLocationRatings(
+          applySemanticRatings(
             terminalJob.results.scores,
             terminalJob.results.skippedIds,
+            terminalJob.results.failures,
           ),
         );
 
         if (terminalJob.summary.processed === 0) {
           setStatus({
             type: "warning",
-            message: "No articles had usable text to rate.",
+            message: "No articles produced a valid semantic rating.",
           });
         }
       }
@@ -89,23 +118,25 @@ export function LocationBar() {
         message:
           error instanceof WorkerRequestError
             ? error.message
-            : "Rating request failed. Please try again.",
+            : "Semantic rating request failed. Please try again.",
       });
       dispatch(
-        setLocationRun({
+        setSemanticRun({
           status: "failed",
           processed: run?.processed ?? 0,
           total: state.articles.length,
           summary: run?.summary ?? EMPTY_SUMMARY,
+          keywordsUsed: keywords,
         }),
       );
     }
   };
 
+  const isLoadingModel = isRunning && run?.summary.modelLoading === 1;
   const progressLabel = run
     ? isLoadingModel
-      ? "Loading model…"
-      : `${run.summary.processed}/${run.summary.eligible} classified`
+      ? "Loading model..."
+      : `${run.summary.processed}/${run.summary.eligible} rated`
     : `${state.articles.length} article${
         state.articles.length === 1 ? "" : "s"
       } ready`;
@@ -113,13 +144,13 @@ export function LocationBar() {
   return (
     <section
       className="stage-aligned-region pb-4"
-      aria-label="Nexus location rating"
+      aria-label="Nexus semantic rating"
     >
       <div className="rounded-lg border border-gray-200/80 bg-white/75 p-4 shadow-theme-sm backdrop-blur dark:border-white/10 dark:bg-gray-950/45">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              Nexus location rating
+              Nexus semantic rating
             </div>
             <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
               {progressLabel}
@@ -131,7 +162,7 @@ export function LocationBar() {
             disabled={isRunning || hasCompletedRun || state.articles.length === 0}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white shadow-theme-sm transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:disabled:text-gray-500"
           >
-            <MapPin aria-hidden="true" className="h-4 w-4" />
+            <BrainCircuit aria-hidden="true" className="h-4 w-4" />
             <span>{isRunning ? "Rating" : "Start Rating"}</span>
           </button>
         </div>
@@ -139,11 +170,12 @@ export function LocationBar() {
         {run && (
           <div
             role="status"
-            className="mt-3 grid gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900/70 dark:text-gray-200 sm:grid-cols-3"
+            className="mt-3 grid gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900/70 dark:text-gray-200 sm:grid-cols-4"
           >
             <span>Eligible {run.summary.eligible}</span>
-            <span>Classified {run.summary.processed}</span>
+            <span>Rated {run.summary.processed}</span>
             <span>Skipped {run.summary.skipped}</span>
+            <span>Failed {run.summary.failed}</span>
           </div>
         )}
 
@@ -162,26 +194,26 @@ export function LocationBar() {
         )}
       </div>
 
-      {isRunning && run && <LocationProgressDialog run={run} />}
+      {isRunning && run && <SemanticProgressDialog run={run} />}
     </section>
   );
 }
 
-function LocationProgressDialog({ run }: { run: LocationRunStatus }) {
+function SemanticProgressDialog({ run }: { run: SemanticRunStatus }) {
   const isLoadingModel = run.summary.modelLoading === 1;
   const title = isLoadingModel
-    ? "Loading location model"
-    : "Rating article locations";
+    ? "Loading semantic model"
+    : "Rating article semantics";
   const progressText = isLoadingModel
-    ? "Preparing the AI classifier"
-    : `${run.summary.processed}/${run.summary.eligible} classified`;
+    ? "Preparing the AI embedder"
+    : `${run.summary.processed}/${run.summary.eligible} rated`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/70 p-4">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Rating article locations"
+        aria-label="Rating article semantics"
         aria-live="polite"
         className="w-full max-w-sm rounded-lg border border-gray-200 bg-white px-6 py-7 text-center shadow-theme-md dark:border-gray-800 dark:bg-gray-950"
       >
@@ -197,13 +229,13 @@ function LocationProgressDialog({ run }: { run: LocationRunStatus }) {
             Eligible {run.summary.eligible}
           </span>
           <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
-            Classified {run.summary.processed}
+            Rated {run.summary.processed}
           </span>
           <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
             Skipped {run.summary.skipped}
           </span>
           <span className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-900/70">
-            Total {run.total}
+            Failed {run.summary.failed}
           </span>
         </div>
       </div>
@@ -211,11 +243,15 @@ function LocationProgressDialog({ run }: { run: LocationRunStatus }) {
   );
 }
 
-function toLocationRunStatus(job: LocationJob): LocationRunStatus {
+function toSemanticRunStatus(
+  job: SemanticJob,
+  keywordsUsed: string[],
+): SemanticRunStatus {
   return {
     status: job.status === "queued" ? "running" : job.status,
     processed: job.processed,
     total: job.total,
     summary: job.summary,
+    keywordsUsed,
   };
 }
