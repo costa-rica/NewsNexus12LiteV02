@@ -34,7 +34,7 @@ describe("ScrapedCell", () => {
 
   it("opens a modal for successful scrape results with enough content", () => {
     const onOpen = vi.fn();
-    render(
+    const { container } = render(
       <ScrapedCell
         scrape={{
           status: "success",
@@ -51,7 +51,12 @@ describe("ScrapedCell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open scraped article" }));
 
     expect(onOpen).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("dialog", { name: "Scraped article content" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", {
+      name: "Scraped article content",
+    });
+    expect(dialog).toBeInTheDocument();
+    expect(document.body).toContainElement(dialog);
+    expect(container).not.toContainElement(dialog);
     expect(screen.getByText("Scraped title")).toBeInTheDocument();
     expect(screen.getByText("https://publisher.example/article")).toBeInTheDocument();
     expect(screen.getByText("direct-http")).toBeInTheDocument();

@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import type { ScrapeResult } from "@/state/types";
 
@@ -10,7 +11,11 @@ interface ScrapeModalProps {
 }
 
 export function ScrapeModal({ scrape, onClose }: ScrapeModalProps) {
-  return (
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/70 p-4"
       role="presentation"
@@ -69,6 +74,7 @@ export function ScrapeModal({ scrape, onClose }: ScrapeModalProps) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
